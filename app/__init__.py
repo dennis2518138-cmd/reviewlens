@@ -1,1 +1,0 @@
-"""ReviewLens app package."""
