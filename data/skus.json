@@ -1,0 +1,63 @@
+[
+  {
+    "product_id": "TWS-X1",
+    "brand": "声浪",
+    "category": "真无线蓝牙耳机",
+    "sku": [
+      "黑",
+      "白",
+      "薄荷绿"
+    ],
+    "price": 249
+  },
+  {
+    "product_id": "TWS-P3",
+    "brand": "听泉",
+    "category": "真无线蓝牙耳机",
+    "sku": [
+      "黑",
+      "白"
+    ],
+    "price": 299
+  },
+  {
+    "product_id": "TWS-M2",
+    "brand": "声浪",
+    "category": "真无线蓝牙耳机",
+    "sku": [
+      "灰",
+      "粉"
+    ],
+    "price": 159
+  },
+  {
+    "product_id": "OB-A6",
+    "brand": "皓齿",
+    "category": "声波电动牙刷",
+    "sku": [
+      "象牙白",
+      "雾蓝"
+    ],
+    "price": 199
+  },
+  {
+    "product_id": "OB-B2",
+    "brand": "洁齿乐",
+    "category": "声波电动牙刷",
+    "sku": [
+      "白",
+      "粉",
+      "黑"
+    ],
+    "price": 169
+  },
+  {
+    "product_id": "OB-C9",
+    "brand": "皓齿",
+    "category": "声波电动牙刷",
+    "sku": [
+      "象牙白"
+    ],
+    "price": 349
+  }
+]

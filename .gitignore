@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 密钥
+.env
+
+# 数据/模型（体积大，按需重建：python scripts/gen_reviews.py 200）
+data/chroma/
+data/*.db
+models/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
