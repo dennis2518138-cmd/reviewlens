@@ -102,25 +102,25 @@ def inject_noise(rows: list[dict], rnd: random.Random) -> list[dict]:
     """人为加脏：清洗工具（D4）必须有真东西可洗。"""
     noisy = []
     n = len(rows)
-    dup_idx = rnd.sample(range(n), max(1, n // 20))           # 5% 完全重复
+    dup_idx = rnd.sample(range(n), max(1, n // 20))
     for i in dup_idx:
         d = dict(rows[i]); d["review_id"] += "-dup"; d["is_dirty"] = True
         noisy.append(d)
-    empty_idx = rnd.sample(range(n), max(1, n // 40))         # 2.5% 空/无效
+    empty_idx = rnd.sample(range(n), max(1, n // 40))
     for i in empty_idx:
         rows[i] = dict(rows[i]); rows[i]["text"] = rnd.choice(["", "  ", "。。。", "此用户未填写评价"])
         rows[i]["is_dirty"] = True
-    emoji_idx = rnd.sample(range(n), max(1, n // 40))         # 2.5% 纯表情/超短
+    emoji_idx = rnd.sample(range(n), max(1, n // 40))
     for i in emoji_idx:
         rows[i] = dict(rows[i]); rows[i]["text"] = rnd.choice(["👍👍👍", "好", "还行吧", "？", "哈哈哈哈"])
         rows[i]["is_dirty"] = True
-    mix_idx = rnd.sample(range(n), max(1, n // 50))           # 2% 中英混/带链接
+    mix_idx = rnd.sample(range(n), max(1, n // 50))
     for i in mix_idx:
         rows[i] = dict(rows[i])
         rows[i]["text"] = rows[i]["text"] + rnd.choice([" btw 客服 response 很慢", " 详情见 https://t.cn/abc123 有图",
                                                         " 五颗星!!! 五星好评!!!"])
         rows[i]["is_dirty"] = True
-    conflict_idx = rnd.sample(range(n), max(1, n // 25))      # 4% 评分与文本矛盾
+    conflict_idx = rnd.sample(range(n), max(1, n // 25))
     for i in conflict_idx:
         rows[i] = dict(rows[i]); rows[i]["rating"] = 6 - rows[i]["rating"]
         rows[i]["is_dirty"] = True
