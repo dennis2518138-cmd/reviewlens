@@ -29,7 +29,7 @@ flowchart TD
 ## 进度
 
 - [x] D1 环境验证 + 仓库骨架 + 210 条评论数据（含金标注）
-- [ ] D2 单 Agent 最小图 + `/chat`
+- [x] D2 单 Agent 最小图 + `/chat`
 - [ ] D3 RAG 子图（向量检索 + 混合召回）
 - [ ] D4 三个工具 + ToolNode
 - [ ] D5 编排器 + 子图并行
@@ -53,5 +53,13 @@ flowchart TD
 
 2026-11-11 数据
 - 210 条合成评论（6 个 SKU / 2 品类），30 条人为注入脏数据，金标注在 data/reviews_gold.jsonl
+
+2026-11-12 通道切换到 DeepSeek 官方（.env 层切换，代码零改动——配置参数化的回报）
+- 官方模型 id 只有 deepseek-flash / deepseek-v4-pro（没有 deepseek-chat）
+- deepseek-flash 默认思考模式：with_structured_output 必须 extra_body={"thinking":{"type":"disabled"}}，
+  且必须构造时传（bind 不转发）；bind_tools 在思考模式下正常
+- 探针三项全绿：chat 1.4s / tool_call 1.6s / structured 1.9s（关思考）；直连 0.18s，无需代理
+- 排坑：shell 残留 HTTPS_PROXY=127.0.0.1:7897 而 Clash 未开 → ConnectionError；网络报错先查代理变量
+- D2：最小图 START→agent→END 跑通；/health 200；POST /chat 返回 reply；空 body 自动 422
 -->
 
