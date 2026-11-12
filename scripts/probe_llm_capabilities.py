@@ -69,6 +69,20 @@ try:
     r = llm.with_structured_output(Plan).invoke("任务：分析某商品最近200条评论并出报告。拆成3步。")
     res["structured"] = f"OK {time.time()-t0:.1f}s :: {r}"
 except Exception as e:
-    res["structured"] = f"FAIL {type(e).__name__}: {str(e)[:160]}"
+    # DeepSeek 官方 deepseek-flash 默认思考模式，思考模式不支持强制 tool_choice。
+    # 实测 2026-11-11：extra_body={"thinking": {"type": "disabled"}} 后正常。回退一次再判失败。
+    if "tool_choice" in str(e):
+        try:
+            t0 = time.time()
+            # extra_body 是 ChatDeepSeek 的构造参数，.bind() 传不进去，必须重建实例
+            fb = ChatDeepSeek(model=model, api_key=key, base_url=base_url,
+                              temperature=0, max_retries=1, timeout=60,
+                              extra_body={"thinking": {"type": "disabled"}})
+            r = fb.with_structured_output(Plan).invoke("任务：分析某商品最近200条评论并出报告。拆成3步。")
+            res["structured"] = f"OK(关思考回退) {time.time()-t0:.1f}s :: {r}"
+        except Exception as e2:
+            res["structured"] = f"FAIL {type(e2).__name__}: {str(e2)[:160]}"
+    else:
+        res["structured"] = f"FAIL {type(e).__name__}: {str(e)[:160]}"
 
 print(json.dumps({"endpoint": base_url, "model": model, **res}, ensure_ascii=False, indent=1))
