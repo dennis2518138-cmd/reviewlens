@@ -26,6 +26,50 @@ flowchart TD
     H -->|reject| R
 ```
 
+## 快速开始
+
+环境：Windows + Python 3.12（实测 3.12.6）。右侧是这台上跑出来的真实输出。
+
+```cmd
+:: 1) 依赖
+uv venv --python 3.12 .venv          :: 或 python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt      :: 全量 freeze，112 个包
+
+:: 2) 配置：在项目根建 .env（仓库不含 .env，也不含 .env.example）
+LLM_BASE_URL=https://api.deepseek.com/v1
+LLM_MODEL=deepseek-flash
+LLM_API_KEY=***
+CHROMA_PATH=./data/chroma
+
+:: 3) 下载本地 embedding 模型（94.8 MB，二进制不入库）
+mkdir models\bge-small-zh-v1.5 && cd models\bge-small-zh-v1.5
+curl -L -o model.onnx            https://hf-mirror.com/Xenova/bge-small-zh-v1.5/resolve/main/onnx/model.onnx
+curl -L -o tokenizer.json        https://hf-mirror.com/Xenova/bge-small-zh-v1.5/resolve/main/tokenizer.json
+curl -L -o tokenizer_config.json https://hf-mirror.com/Xenova/bge-small-zh-v1.5/resolve/main/tokenizer_config.json
+curl -L -o config.json           https://hf-mirror.com/Xenova/bge-small-zh-v1.5/resolve/main/config.json
+cd ..\..
+
+:: 4) 建索引 + 检索评测
+python scripts\build_index.py        :: {"indexed": 200, "skipped": 10, "count": 200}  ~2.2s
+python scripts\check_retrieval.py    :: hit@1 = 6/6   hit@3 = 6/6
+
+:: 5) 起服务
+python -m uvicorn app.main:app --port 8000
+```
+
+打开 **http://127.0.0.1:8000/docs**，选 `POST /chat`、Try it out，发
+`{"message": "物流方面用户在抱怨什么？"}` —— 返回的 `reply` 里每一句都能在
+`data/reviews_raw.jsonl` 里找到出处。再发 `{"message": "保修几年？"}`，
+库里没有保修信息，正确行为是回答"评论里没有提到保修几年"（这条是 RAG 的负向验收）。
+
+| 已知坑 | 处置 |
+|---|---|
+| `LLM_BASE_URL` 和 `LLM_MODEL` **必须成对更换** | 中转站的 id 是 `DeepSeek-V4.1-Flash-1017`，官方只有 `deepseek-flash` / `deepseek-v4-pro`；只改一个会 400 `model not found` |
+| PowerShell 里 `curl` 是 `Invoke-WebRequest` 别名 | 用 `curl.exe`，或直接在 `/docs` 网页里试 |
+| 请求 LLM 报 `ConnectionError` | 十有八九是 shell 里残留了 `HTTP_PROXY=127.0.0.1:7897` 而代理客户端没开。cmd 里 `set HTTP_PROXY=` 清掉再试；`set HTTPS_PROXY` 看有没有值就是这一步 |
+| `model.onnx` 应为 **94,851,877 字节** | 小于这个数就是下载中断，删掉重下 |
+
 ## 进度
 
 - [x] D1 环境验证 + 仓库骨架 + 210 条评论数据（含金标注）
