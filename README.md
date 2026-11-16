@@ -30,7 +30,7 @@ flowchart TD
 
 - [x] D1 环境验证 + 仓库骨架 + 210 条评论数据（含金标注）
 - [x] D2 单 Agent 最小图 + `/chat`
-- [ ] D3 RAG 子图（向量检索 + 混合召回）
+- [x] D3 RAG 检索闭环（向量检索 + 离线评测；混合召回待做）
 - [ ] D4 三个工具 + ToolNode
 - [ ] D5 编排器 + 子图并行
 - [ ] D6 SQLite 检查点 + HITL 中断恢复
@@ -61,5 +61,18 @@ flowchart TD
 - 探针三项全绿：chat 1.4s / tool_call 1.6s / structured 1.9s（关思考）；直连 0.18s，无需代理
 - 排坑：shell 残留 HTTPS_PROXY=127.0.0.1:7897 而 Clash 未开 → ConnectionError；网络报错先查代理变量
 - D2：最小图 START→agent→END 跑通；/health 200；POST /chat 返回 reply；空 body 自动 422
+
+2026-11-12 D3 检索实测（scripts/build_index.py + scripts/check_retrieval.py）
+- 210 条入库 2.2s：indexed 200 / skipped 10（空文本与超短噪声在入库前拦掉）
+- 6 组「查询→期望维度」离线评测：hit@1 6/6、hit@3 6/6，sim 区间 0.59~0.82
+  ⚠ 查询词与维度词表同源，这组数字只证明"通路正确"，不等于"效果好"；D9 要造非同源说法集
+- 稀有 token 漏召回（hybrid 立项依据）：HX3216 / AirPods 各仅 1 条含该词且确已入库，
+  纯向量 top3 均未命中，且两个无关查询返回完全相同的相似度序列 [0.501, 0.491, 0.490]；
+  关键字精确匹配 100% 命中 → 结论：BM25 + 向量双路 + RRF
+- 精确标识（型号 / SKU / 订单号）不该走向量检索：查「TWS-X1」返回 P3，
+  因为型号串在评论文本中出现 0 次（存在 metadata 里）→ 正解是 where={"product_id": ...} 过滤
+- 防幻觉负例：问「保修几年」（库内无保修维度）→ 「评论里没有提到保修年限。」
+- 正向溯源：回答的 5 处事实断言全部可在检索原文逐字命中；中性评论被模型自行排除出"抱怨"
+- chromadb 1.5.9 坑：query() 走 embed_query(input=)，只实现 __call__ 会写入正常、查询 AttributeError
 -->
 

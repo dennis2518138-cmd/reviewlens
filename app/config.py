@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -18,3 +19,13 @@ def get_llm(temperature: float = 0.2, thinking: bool = False):
         timeout=90,
         extra_body=extra,
     )
+
+MODEL_DIR = ROOT / "models" / "bge-small-zh-v1.5"
+
+@lru_cache(maxsize=1)
+def get_embedder():
+    from app.embedding import BgeSmallZh
+    return BgeSmallZh(MODEL_DIR)
+
+
+CHROMA_PATH = ROOT / os.getenv("CHROMA_PATH", "./data/chroma")
