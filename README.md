@@ -51,7 +51,7 @@ curl -L -o config.json           https://hf-mirror.com/Xenova/bge-small-zh-v1.5/
 cd ..\..
 
 :: 4) 建索引 + 检索评测
-python scripts\build_index.py        :: {"indexed": 200, "skipped": 10, "count": 200}  ~2.2s
+python scripts\build_index.py        :: {"indexed": 190, "skipped": 20, "count": 190}  ~2.2s
 python scripts\check_retrieval.py    :: hit@1 = 6/6   hit@3 = 6/6
 
 :: 5) 起服务
@@ -108,6 +108,7 @@ python -m uvicorn app.main:app --port 8000
 
 2026-11-12 D3 检索实测（scripts/build_index.py + scripts/check_retrieval.py）
 - 210 条入库 2.2s：indexed 200 / skipped 10（空文本与超短噪声在入库前拦掉）
+  ↑ 11-17 修正：加索引侧文本去重后为 indexed 190 / skipped 20，见下方「数据与口径修正」
 - 6 组「查询→期望维度」离线评测：hit@1 6/6、hit@3 6/6，sim 区间 0.59~0.82
   ⚠ 查询词与维度词表同源，这组数字只证明"通路正确"，不等于"效果好"；D9 要造非同源说法集
 - 稀有 token 漏召回（hybrid 立项依据）：HX3216 / AirPods 各仅 1 条含该词且确已入库，
@@ -118,5 +119,21 @@ python -m uvicorn app.main:app --port 8000
 - 防幻觉负例：问「保修几年」（库内无保修维度）→ 「评论里没有提到保修年限。」
 - 正向溯源：回答的 5 处事实断言全部可在检索原文逐字命中；中性评论被模型自行排除出"抱怨"
 - chromadb 1.5.9 坑：query() 走 embed_query(input=)，只实现 __call__ 会写入正常、查询 AttributeError
+
+2026-11-17 数据与评测口径修正（D4 开工前）
+- 缺陷①：`gen_reviews.py` 用 `rating = 6 - rating` 造"评分矛盾"，对 rating=3 是空操作（3→3），
+  造出 gold 标脏但评分/文本零差异的样本 → 改判 2 条为 clean（gold dirty 30 → 28）；
+  脚本侧改为按 gold 情感指定反向评分档 FLIP={pos:(1,2), neg:(4,5), neu:(1,5)}，保证注入必然可检
+- 缺陷②：dup 副本进了向量库（曾有 10 条重复文本白占 topK）→ `index_reviews` 加 seen_texts
+  按文本去重，现索引内重复组 0；注意 `seen_texts.add()` 必须在所有 continue 之后（先决定留，再登记）
+- 缺陷③：`inject_noise` 之后有 `rnd.shuffle(rows)`，重复组内"哪条算副本"无定义 ⇒
+  评测重复类必须按组判（每组恰好留 1 条），不能按 id 与 gold 的 -dup 后缀对齐
+- clean_data 规则首次体检：格式类召回 14/14=1.00 | 精确率 14/16=0.875 | 重复类组级 10/10 |
+  评分矛盾 0/4（规则不可达）。误杀 2 条根因：`[A-Za-z]{4,}` 把合法提及 AirPods / iPad 的评论
+  判成中英混 ⇒ 需品牌竞品白名单兜底。另：手写情感词典 vs gold 仅 0.300（88 条 pos 估成 neu，
+  阈值 >=2 命中词对 20-50 字短评过严）⇒ 语义矛盾不放进规则清洗，评测四个数分开报
+- 撤回的错误结论：①"规则召回 0.467"（口径混了数据缺陷与工具能力）②"7 条孤儿 dup"（实测 0）
+  ③"3 条零差异样本"（实为 2 条，第 3 条是被截断文本误导）④"改完数据天花板 1.0"（混淆标注自洽与可检出）
+- 重跑后检索结论未变：hit@1 6/6、hit@3 6/6、稀有 token 仍漏召回 [0.50, 0.49, 0.49]
 -->
 

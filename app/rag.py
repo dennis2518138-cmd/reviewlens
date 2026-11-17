@@ -41,11 +41,13 @@ def get_collection(reset: bool = False):
 def index_reviews(rows: list[dict], reset: bool = False) -> dict:
     col = get_collection(reset=reset)
     docs, ids, metas, skipped = [], [], [], 0
+    seen_texts: set[str] = set()
     for r in rows:
         text = (r.get("text") or "").strip()
-        if text in JUNK or len(text) < 2:
+        if text in JUNK or len(text) < 2 or text in seen_texts:
             skipped += 1
             continue
+        seen_texts.add(text)
         docs.append(text)
         ids.append(r["review_id"])
         metas.append({"product_id": r["product_id"], "brand": r["brand"],

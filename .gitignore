@@ -9,6 +9,7 @@ __pycache__/
 
 # 数据/模型（体积大，按需重建：python scripts/gen_reviews.py 200）
 data/chroma/
+data/*.bak-*
 data/*.db
 models/
 

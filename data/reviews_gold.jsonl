@@ -13,7 +13,7 @@
 {"review_id": "OB-B2-3913-03", "product_id": "OB-B2", "sentiment": "pos", "dimensions": ["外观做工"], "is_dirty": false}
 {"review_id": "OB-C9-3942-019", "product_id": "OB-C9", "sentiment": "neu", "dimensions": ["清洁力"], "is_dirty": false}
 {"review_id": "TWS-M2-3861-032", "product_id": "TWS-M2", "sentiment": "neg", "dimensions": ["连接稳定性", "客服"], "is_dirty": false}
-{"review_id": "OB-C9-3942-021", "product_id": "OB-C9", "sentiment": "neu", "dimensions": ["物流"], "is_dirty": true}
+{"review_id": "OB-C9-3942-021", "product_id": "OB-C9", "sentiment": "neu", "dimensions": ["物流"], "is_dirty": false}
 {"review_id": "OB-B2-3913-032", "product_id": "OB-B2", "sentiment": "neg", "dimensions": ["噪声", "清洁力", "价格性价比"], "is_dirty": false}
 {"review_id": "OB-A6-3885-07", "product_id": "OB-A6", "sentiment": "pos", "dimensions": ["价格性价比"], "is_dirty": false}
 {"review_id": "OB-C9-3942-028", "product_id": "OB-C9", "sentiment": "neg", "dimensions": ["客服"], "is_dirty": false}
@@ -46,7 +46,7 @@
 {"review_id": "OB-B2-3913-08", "product_id": "OB-B2", "sentiment": "pos", "dimensions": ["价格性价比"], "is_dirty": false}
 {"review_id": "OB-B2-3913-07", "product_id": "OB-B2", "sentiment": "pos", "dimensions": ["清洁力"], "is_dirty": false}
 {"review_id": "OB-C9-3942-030-dup", "product_id": "OB-C9", "sentiment": "neg", "dimensions": ["连接稳定性"], "is_dirty": true}
-{"review_id": "TWS-M2-3861-02", "product_id": "TWS-M2", "sentiment": "neu", "dimensions": ["物流"], "is_dirty": true}
+{"review_id": "TWS-M2-3861-02", "product_id": "TWS-M2", "sentiment": "neu", "dimensions": ["物流"], "is_dirty": false}
 {"review_id": "TWS-X1-3789-04", "product_id": "TWS-X1", "sentiment": "pos", "dimensions": ["物流", "外观做工"], "is_dirty": false}
 {"review_id": "TWS-P3-3819-023", "product_id": "TWS-P3", "sentiment": "neu", "dimensions": ["客服"], "is_dirty": false}
 {"review_id": "TWS-M2-3861-00", "product_id": "TWS-M2", "sentiment": "pos", "dimensions": ["音质", "价格性价比"], "is_dirty": false}

@@ -121,8 +121,12 @@ def inject_noise(rows: list[dict], rnd: random.Random) -> list[dict]:
                                                         " 五颗星!!! 五星好评!!!"])
         rows[i]["is_dirty"] = True
     conflict_idx = rnd.sample(range(n), max(1, n // 25))
+    # 按文本情感指定“反向”评分档：保证注入后必然可检出。
+    # 旧写法 rating = 6 - rating 对 3 星无操作（3→3），会造出标了脏但零差异的样本。
+    FLIP = {"pos": (1, 2), "neg": (4, 5), "neu": (1, 5)}
     for i in conflict_idx:
-        rows[i] = dict(rows[i]); rows[i]["rating"] = 6 - rows[i]["rating"]
+        rows[i] = dict(rows[i])
+        rows[i]["rating"] = rnd.choice(FLIP[rows[i]["gold_sentiment"]])
         rows[i]["is_dirty"] = True
     return rows + noisy
 

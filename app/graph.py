@@ -9,7 +9,9 @@ TOP_K = 3
 
 
 def retrieve(state: AnalysisState):
-    query = state["messages"][-1].content
+    query = next((m.content for m in reversed(state["messages"]) if m.type == "human"), "")
+    if not query:
+        return {"retrieved": []}
     return {"retrieved": search(query, k=TOP_K)}
 
 
