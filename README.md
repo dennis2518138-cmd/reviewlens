@@ -75,7 +75,7 @@ python -m uvicorn app.main:app --port 8000
 - [x] D1 环境验证 + 仓库骨架 + 210 条评论数据（含金标注）
 - [x] D2 单 Agent 最小图 + `/chat`
 - [x] D3 RAG 检索闭环（向量检索 + 离线评测；混合召回待做）
-- [ ] D4 三个工具 + ToolNode
+- [x] D4 三个工具 + ToolNode + 工具轮次成本闸
 - [ ] D5 编排器 + 子图并行
 - [ ] D6 SQLite 检查点 + HITL 中断恢复
 - [ ] D7 SSE 流式 + 单页前端
@@ -135,5 +135,29 @@ python -m uvicorn app.main:app --port 8000
 - 撤回的错误结论：①"规则召回 0.467"（口径混了数据缺陷与工具能力）②"7 条孤儿 dup"（实测 0）
   ③"3 条零差异样本"（实为 2 条，第 3 条是被截断文本误导）④"改完数据天花板 1.0"（混淆标注自洽与可检出）
 - 重跑后检索结论未变：hit@1 6/6、hit@3 6/6、稀有 token 仍漏召回 [0.50, 0.49, 0.49]
+
+2026-11-17 D4 完成（三工具 + ToolNode + 成本闸）
+- 三工具参数统一为 product_ids；clean_data 改多商品后全库回归不变（210→kept 186，
+  per_sku 六个 kept 相加 = 31+30+34+32+31+28 = 186，可加性自检通过）
+- 例句改为「差评优先 + 跨话题不重复」：8 个话题给出 8 条不同例句（评分 1,1,2,2,3,4,3,4）；
+  改完立刻暴露词典误命中的真面目——「充电仓有划痕」被算进续航、「人声很干净」被算进清洁力，
+  这就是 precision 0.779 里那 22% 的具体长相 ⇒ 话题结论必须模型复核，词典不能单独定案
+- 词典与成绩单一起放 data/dimensions.json（topics + eval{precision,recall,against,measured_at}）；
+  工具把 eval 原样抄进返回值 ⇒ 模型回答里自己说出「覆盖率约 53%，条数是下限」
+- ⑤ 验收：模型完全自主填参数 product_ids=['TWS-M2','TWS-X1']，且一轮并行请求 3 个工具
+  （消息序列 human→ai→tool×3→ai 共 6 条），结论正确；top_n/example_limit 也是它自己调的
+- ⚠️ 第一版 ReAct 在 recursion_limit=8 下抛 GraphRecursionError。根因：limit 数的是超级步不是工具轮次
+  （1 轮工具往返 = tools + agent = 2 步，8 只够约 3 轮）⇒ 同一条问题有时过有时崩，属最危险的不稳定
+- 修法：state 加 tool_rounds，call_model 只在真请求工具时 +1，route_after_agent 硬闸 MAX_TOOL_ROUNDS=2；
+  单元测试（不调 LLM、确定性）：rounds=0/1→tools，rounds=2/5→__end__，无 tool_calls→__end__
+- 模型曾把品牌名当商品 ID 传（['声浪','皓齿']）→ unknown_product_ids + available_product_ids 让它自纠成功，
+  回答里如实说「工具里没有这两个商品，没法做话题统计」；再在 system 里给出 KNOWN_IDS 清单后，改为传 6 个真 ID
+- 负例升级：问保修年限 → 「没有提到保修年限，只有一条相关线索」，逐句溯源 OB-B2-3913-028
+  原文确有「刷柄进水不震…最后说不在保修范围」⇒ 仍是零编造，且比 D3 的纯拒答信息量更高
+- 成本实测：keyword_extract top_n=4 输出 3678 字符、top_n=8 6020；clean_data 8 样本 1428 字符
+- API 细节：tools_condition 返回的是字符串 "__end__"（不是 END 对象），映射表键必须写 "__end__"；
+  换成自定义 route_after_agent 后可省 path_map（返回值直接当节点名）
+- D5 伏笔（已亲眼见到）：② 里三个 ToolMessage 并行写 messages 没冲突，全靠 add_messages reducer；
+  D5 两个子图并行写同一个标量字段（sentiment/comparison）没配 reducer 就会 InvalidUpdateError
 -->
 

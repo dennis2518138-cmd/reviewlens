@@ -19,5 +19,8 @@ def health():
 
 @app.post("/chat")
 def chat(body: ChatIn):
-    result = graph.invoke({"messages": [("user", body.message)]})
+    result = graph.invoke(
+        {"messages": [("user", body.message)]},
+        config={"recursion_limit": 12, "configurable": {"thread_id": body.thread_id}},
+    )
     return {"reply": result["messages"][-1].content}
