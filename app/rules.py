@@ -27,11 +27,6 @@ def junk_reason(text: str) -> str | None:
 
 
 def dedupe(rows: list[dict]) -> tuple[list[dict], list[dict]]:
-    """按文本去重，保留第一条。返回 (留下的行, 被去掉的行)。
-
-    返回「行」而不是数量：调用方要按商品范围分类统计剔除数，
-    只给一个数字的话每个工具得自己再算一遍，那就是另一个会漂移的口径。
-    """
     seen: set[str] = set()
     kept: list[dict] = []
     dropped: list[dict] = []
@@ -46,11 +41,6 @@ def dedupe(rows: list[dict]) -> tuple[list[dict], list[dict]]:
 
 
 def clean_rows(rows: list[dict]) -> tuple[list[dict], list[tuple[dict, str]]]:
-    """唯一的清洗流水线，所有工具都走它，口径才不可能漂移。
-
-    顺序是设计：先过格式规则，再去重。因为「一条空文本的副本」真正的问题是它空，
-    不是它重复；顺序反过来，剔除分布会变，README 里记录的数字就得全部重测。
-    """
     non_junk: list[dict] = []
     dropped: list[tuple[dict, str]] = []
     for r in rows:
