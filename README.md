@@ -14,17 +14,21 @@
 
 ```mermaid
 flowchart TD
-    U[用户: 商品 / 评论批次] --> O[编排器: 拆任务并路由]
-    O --> I[采集子图: 清洗 / 去重 / 入库]
-    O --> A[分析子图: 情感统计 + 关键词 并行]
-    O --> C[对比子图: 检索历史评论 + 维度对比]
-    A --> R[报告子图: 结构化生成]
-    C --> R
-    I --> R
-    R --> H{HITL 审核}
+    U[用户提问] --> RE[检索: 向量库取相似评论]
+    RE --> O[编排器: structured output 出 plan]
+    O -->|fan-out 并行| A[评分分析子图: 取数 → 判断]
+    O -->|fan-out 并行| B[话题分析子图: 取数 → 判断]
+    A -->|fan-in| C[对比节点: 跨口径综合]
+    B -->|fan-in| C
+    C --> R[报告 agent: 采用结论, 不足时才补调工具]
+    R <--> T[ToolNode: clean_data / sentiment_stats / keyword_extract]
+    R --> H{HITL 审核 · 未实现 D6}
     H -->|approve| OUT[最终报告]
     H -->|reject| R
 ```
+
+> 与最初设计稿的两处差异：**清洗不是独立子图**，是 `clean_data` 工具（D4 落地时就定了）；
+> **HITL 还没做**（D6）。图里保留未实现节点是为了标出它在链路里的位置。
 
 ## 快速开始
 
@@ -76,7 +80,7 @@ python -m uvicorn app.main:app --port 8000
 - [x] D2 单 Agent 最小图 + `/chat`
 - [x] D3 RAG 检索闭环（向量检索 + 离线评测；混合召回待做）
 - [x] D4 三个工具 + ToolNode + 工具轮次成本闸
-- [ ] D5 编排器 + 子图并行
+- [x] D5 编排器（structured output + 枚举白名单）+ 评分/话题子图并行 + fan-in 对比；结论已回灌报告节点
 - [ ] D6 SQLite 检查点 + HITL 中断恢复
 - [ ] D7 SSE 流式 + 单页前端
 - [ ] D8 Docker 部署
@@ -182,5 +186,45 @@ python -m uvicorn app.main:app --port 8000
   并准确引用 OB-B2-3913-028 原文"最后说不在保修范围"，仍零编造
 - 官方现成件 langgraph-supervisor / langgraph-swarm 均未安装，决定不装：3 个工作者自写路由约 30 行，
   且"编排器怎么决定调用哪个工作者"必须能答自己的实现（方案第九节"只会说用了 LangGraph"的反面）
+
+2026-11-19 D5 完成（编排器 + 分析子图并行 + fan-in 对比）
+- 结构化输出实测：官方 DeepSeek + thinking=False 下 with_structured_output(Plan) 可用，三类问题分别得
+  ['rating','topic','compare'] / ['topic','report'] / ['topic','report']，零非法值
+  ⇒ Worker 用 Literal 枚举而不是 list[str]，把"只能选存在的工作者"交给 schema 挡
+- reducer 判据 = 数写者，不看别的：messages 多写者→add_messages；sentiment 2 并行写者→merge_dict；
+  retrieved / plan / comparison / tool_rounds 单写者→不配；report 刻意不配
+  （D6 人工 reject 后重写必须覆盖，配追加型会攒出两份报告）⇒ reducer 不是越多越安全
+- 浅合并而非深合并：深合并会让 worker 不再产出的旧子键残留在 state，检查点恢复时会拿上次结论跑这次
+- ⚠️ 并行分支写同一子键的实测（变量隔离三轮）：赢家 = 节点名字典序靠后者。只改注册顺序→赢家翻；
+  只改节点名→赢家翻 ⇒ 确定但依赖命名，比随机更阴。契约：并行分支永不写同一子键
+- 子图三条硬事实（最小图实测，不是我推的）：
+  ① compiled 子图作节点默认回传**整份 state**（连它没写过的键也回传）⇒ 两个并行子图同名键当场
+     InvalidUpdateError: At key 'comparison': Can receive only one value per step
+  ② 修法 attach(subgraph, visible) 白名单映射；映射后 merge_dict 正常（rating 与 topics 两份都在）
+  ③ 子图写 messages 会原样冒到父图：历史变成 ['用户问','子图内部碎碎念'] ⇒ worker 白名单里不含 messages
+     （多轮时模型会把 worker 的中间话当成"我上一轮说过"，越说越歪）
+- 同名节点重复注册不静默覆盖：ValueError: Node `n` already present（实测）
+- fan-in 语义实测：两条入边指向 compare，它只跑 1 次且等两边都完成 ⇒ "并行跑完再汇总"不需要自己写锁
+- ⚠️ 并行收益实测（不漂亮但真实）：并行 8.0s vs 手工改串行 8.6s = 省 0.6s（7%）。根因：一次请求
+  5~6 次 LLM 调用里只有两个 judge 能重叠，retrieve→编排→compare→agent 全串行
+  ⇒ 简历模板那句"单次分析耗时从 45s 降至 18s"作废，能写的是"评分/话题两链并行、实测重叠 0.6s，
+  瓶颈在链上 4 次串行 LLM 调用"（样本 n=1，D9 跑 5 次取中位数再定稿）
+- ⚠️ 多 Agent 最典型的失败形态，这次真撞到了：评分口径说 TWS-M2 更差（3.47<3.71）、
+  话题口径说 TWS-X1 更差（续航均分 3.20<3.38），**两个都对**，因为统计对象不同。
+  compare 没抹平冲突而是把两个口径并列写进 finding ⇒ 正确处置不是"选一个"，是把口径规则写进提示词
+  （CONFLICT_RULE：整体口碑以评分为准、话题只用于定位维度、矛盾必须分别说清）
+- ⚠️ 本轮最贵的架构缺口：call_model 的 system 只拼了 retrieved，没读 sentiment/comparison
+  ⇒ 编排 + 并行 + 综合全跑完，agent 照样自己重调工具（消息 human,ai,tool,tool,ai / tool_rounds=1）
+  补 _brief(state) 后：消息 human,ai、tool_rounds=None、零重复取数（省 1 轮往返 + 约 2000 token 工具输出）
+  ⇒ **多 Agent 系统最贵的 bug 不是崩，是"跑了一堆没人读"**
+- 防幻觉核对第一次跑通：Insight 强制模型单列引用数字 ⇒ 本次结论引用 20 个数字，原始数据里 0 个找不到
+  （numbers 与 *_raw 留在 state 只给 D9 评测比对用，不进 prompt——喂进去只烧 token 不增信息）
+- compare 空跑修正：plan 只选 topic 时它拿空数据仍调一次 LLM 且产出 {worst: None}
+  （前端会渲染"最差：None"）⇒ 开头 if not ratings: return {}，宁可丢不要脏
+- ⚠️ 链路零重试：本轮跑到 agent 节点撞 DeepSeek DNS getaddrinfo failed，整请求 500、前面 4 次调用白烧
+  ⇒ D6 顺带给 judge 节点加 RetryPolicy（LangGraph 内置，节点级）
+- ⚠️ 一类新 bug：_judge 抄错成 facts.get('question','') ⇒ 永远取到空串、**一行代码都不报错**，
+  模型照样返回 finding/numbers，但它是在回答"没有问题"。只能靠"结论是否切题"发现，报错帮不上忙
+- 命名遗留（已知不修）：compare 实际做"比较 + 跨口径综合判断"，名字只体现了前者；靠 docstring 兜
 -->
 
