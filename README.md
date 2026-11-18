@@ -51,7 +51,7 @@ curl -L -o config.json           https://hf-mirror.com/Xenova/bge-small-zh-v1.5/
 cd ..\..
 
 :: 4) 建索引 + 检索评测
-python scripts\build_index.py        :: {"indexed": 190, "skipped": 20, "count": 190}  ~2.2s
+python scripts\build_index.py        :: {"indexed": 186, "skipped": 24, "count": 186}  ~2s
 python scripts\check_retrieval.py    :: hit@1 = 6/6   hit@3 = 6/6
 
 :: 5) 起服务
@@ -158,6 +158,29 @@ python -m uvicorn app.main:app --port 8000
 - API 细节：tools_condition 返回的是字符串 "__end__"（不是 END 对象），映射表键必须写 "__end__"；
   换成自定义 route_after_agent 后可省 path_map（返回值直接当节点名）
 - D5 伏笔（已亲眼见到）：② 里三个 ToolMessage 并行写 messages 没冲突，全靠 add_messages reducer；
-  D5 两个子图并行写同一个标量字段（sentiment/comparison）没配 reducer 就会 InvalidUpdateError
+  D5 两个子图并行写同一个标量字段没配 reducer 就会 InvalidUpdateError
+  （实测最小图复现原文：At key 'sentiment': Can receive only one value per step. Use an Annotated key…；
+   配 Annotated[dict, merge] 后两个分支的值都在）
+
+2026-11-18 D5-① 清洗口径统一（app/rules.py 上线）
+- 动因：三份规则（clean_data / sentiment_stats / keyword_extract 各抄一遍）+ 索引侧还有第四份
+  （rag.py 自己的 JUNK 元组，连 "  " 都没有）⇒ "两份真相"已经漂移到字段级别
+- 新件：rules.py = junk_reason(纯函数，单条可判) + dedupe(有状态，跨条) + clean_rows(流水线)
+  拆三个函数而不是一个：输入不同、状态不同，合并就会逼 clean_data 改成批处理且没法单条问"脏不脏"
+- clean_rows 内部顺序 = 先格式规则、后去重（保序的原因：D4 记录的剔除分布 {empty10,has_link1,mixed_lang3,duplicate10}
+  可以原样复现；反过来会把"空文本的副本"记成 duplicate，README 数字全部要重测）
+- 跨模块等式（新验收标准）：索引 indexed == 工具 kept == 186；索引 by_reason == 工具 removed 逐字一致
+- 顺序无关性（新能力）：一次查两个 SKU = 60、分开查相加 = 60、全库里这两个 = 60，三者一致
+  ← D4 版本按 target 顺序去重，将来出现跨商品重复文本时结果会随请求范围漂移
+- 代价实测：hit@1 6/6、hit@3 6/6 不变 ⇒ 我原先设想的"入库宽、分析严"被自己的数据否决，直接统一
+- ⚠️ 数字更正：口径统一后索引 186（原 190）、sentiment TWS-M2 n=32 avg=3.47（原 36/3.42）、
+  keyword_extract TWS-M2 续航 n=8/3.38（原 9/3.22）；OB-C9 话题数 8→6
+  被排除那条是带英文尾缀的中英混样本且评分偏高 ⇒ 一条活教材：脏数据同时影响条数和均值
+- ⚠️ 稀有 token 证据降级：HX3216 仍稳定漏召回（两个查询 sim 序列依旧完全相同 [0.501,0.490,0.488]），
+  但 AirPods 索引重建后已进 top3（sim=0.488）⇒ README/面试话术改为"仅 HX3216 稳定漏"，不能再说两个都漏
+- 图级回归（口径变了必须重跑）：正向 4 条消息、结论引用工具数据；负向"没有提到具体保修年限"
+  并准确引用 OB-B2-3913-028 原文"最后说不在保修范围"，仍零编造
+- 官方现成件 langgraph-supervisor / langgraph-swarm 均未安装，决定不装：3 个工作者自写路由约 30 行，
+  且"编排器怎么决定调用哪个工作者"必须能答自己的实现（方案第九节"只会说用了 LangGraph"的反面）
 -->
 

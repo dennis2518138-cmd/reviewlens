@@ -3,10 +3,10 @@ from __future__ import annotations
 import chromadb
 
 from app.config import CHROMA_PATH, get_embedder
+from app.rules import clean_rows, clean_text
 
 COLLECTION = "reviews"
 BATCH = 32
-JUNK = ("", "此用户未填写评价", "。。。")
 
 
 class BgeChromaEF:
@@ -39,23 +39,26 @@ def get_collection(reset: bool = False):
 
 
 def index_reviews(rows: list[dict], reset: bool = False) -> dict:
+    """入库前的质量门与工具共用同一条清洗流水线（app/rules.py），口径不可能分叉。"""
     col = get_collection(reset=reset)
-    docs, ids, metas, skipped = [], [], [], 0
-    seen_texts: set[str] = set()
-    for r in rows:
-        text = (r.get("text") or "").strip()
-        if text in JUNK or len(text) < 2 or text in seen_texts:
-            skipped += 1
-            continue
-        seen_texts.add(text)
-        docs.append(text)
+    kept, dropped = clean_rows(rows)
+
+    by_reason: dict[str, int] = {}
+    for _, reason in dropped:
+        by_reason[reason] = by_reason.get(reason, 0) + 1
+
+    docs, ids, metas = [], [], []
+    for r in kept:
+        docs.append(clean_text(r))
         ids.append(r["review_id"])
         metas.append({"product_id": r["product_id"], "brand": r["brand"],
                       "category": r["category"], "sku": r["sku"],
                       "rating": int(r["rating"]), "date": r["date"]})
+
     for i in range(0, len(docs), BATCH):
         col.upsert(ids=ids[i:i + BATCH], documents=docs[i:i + BATCH], metadatas=metas[i:i + BATCH])
-    return {"indexed": len(docs), "skipped": skipped, "count": col.count()}
+    return {"indexed": len(docs), "skipped": len(dropped),
+            "by_reason": by_reason, "count": col.count()}
 
 
 def search(query: str, k: int = 3, where: dict | None = None) -> list[dict]:

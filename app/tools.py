@@ -2,18 +2,15 @@ from __future__ import annotations
 
 import functools
 import json
-import re
 from pathlib import Path
 
 from langchain_core.tools import tool
 
+from app.rules import clean_rows, clean_text
+
+
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "reviews_raw.jsonl"
-
-JUNK = {"", "。。。", "此用户未填写评价", "  "}
-BRAND = {"airpods", "ipad", "iphone", "huawei", "xiaomi", "miui", "bose", "sony",
-         "samsung", "apple", "hx3216", "tws", "ob", "app", "cpu", "usb", "led", "fm", "nfc"}
-
 
 def load_reviews() -> list[dict]:
     """读全部原始评论。按商品过滤交给调用方，因为它们都还要按商品分组统计。"""
@@ -27,13 +24,15 @@ def clean_data(product_ids: list[str] | None = None, sample_limit: int = 8) -> d
 
     在分析某个商品的评论之前先调用我；不确定有哪些商品时可以留空，我会清洗全部商品。
     我只返回统计数字和少量干净样本，不会把全部评论塞回对话。
-    重复判断跨商品生效：同一条文字在两个商品下各出现一次，也只保留第一条。
+    去重在全库范围做，所以同一条结果与本次请求哪些商品无关。
 
     Args:
         product_ids: 商品 ID 列表，例如 ["TWS-X1", "TWS-P3"]；留空表示清洗全库。
         sample_limit: 最多返回几条干净评论样本，默认 8（在多个商品之间轮流取，避免全来自第一个商品）。
     """
     rows = load_reviews()
+    cleaned, dropped_all = clean_rows(rows)      # 全库、文件顺序 ⇒ 与请求范围无关，结果稳定
+
     buckets: dict[str, list[dict]] = {}
     for r in rows:
         buckets.setdefault(r["product_id"], []).append(r)
@@ -41,33 +40,20 @@ def clean_data(product_ids: list[str] | None = None, sample_limit: int = 8) -> d
     wanted = _wanted(product_ids)
     unknown = [p for p in wanted if p not in buckets]
     target = wanted or sorted(buckets)
+    scope = set(target)
+
+    removed: dict[str, int] = {}
+    for r, reason in dropped_all:
+        if r["product_id"] in scope:
+            removed[reason] = removed.get(reason, 0) + 1
 
     kept_by_sku: dict[str, list[dict]] = {}
-    removed: dict[str, int] = {}
-    seen: set[str] = set()
-
-    def drop(kind: str) -> None:
-        removed[kind] = removed.get(kind, 0) + 1
-
-    for sku in target:
-        for r in buckets.get(sku, []):
-            text = (r.get("text") or "").strip()
-            if text in JUNK or len(text) < 2:
-                drop("empty"); continue
-            if not re.search(r"[\u4e00-\u9fffA-Za-z0-9]", text):
-                drop("pure_emoji"); continue
-            if len(text) < 5:
-                drop("too_short"); continue
-            if "http" in text or "www." in text:
-                drop("has_link"); continue
-            if {w.lower() for w in re.findall(r"[A-Za-z]{4,}", text)} - BRAND:
-                drop("mixed_lang"); continue
-            if text in seen:
-                drop("duplicate"); continue
-            seen.add(text)
-            kept_by_sku.setdefault(sku, []).append(
-                {"review_id": r["review_id"], "product_id": sku,
-                 "rating": int(r["rating"]), "text": text[:140]})
+    for r in cleaned:
+        if r["product_id"] not in scope:
+            continue
+        kept_by_sku.setdefault(r["product_id"], []).append(
+            {"review_id": r["review_id"], "product_id": r["product_id"],
+             "rating": int(r["rating"]), "text": clean_text(r)[:140]})
 
     pools = [kept_by_sku[s] for s in target if kept_by_sku.get(s)]
     samples: list[dict] = []
@@ -114,7 +100,7 @@ def sentiment_stats(product_ids: list[str] | None = None) -> dict:
     Args:
         product_ids: 商品 ID 列表，例如 ["TWS-X1", "TWS-P3"]；留空表示统计全部商品。
     """
-    rows = load_reviews()
+    rows, _ = clean_rows(load_reviews())
     wanted = _wanted(product_ids)
 
     buckets: dict[str, list[dict]] = {}
@@ -174,7 +160,7 @@ def keyword_extract(product_ids: list[str] | None = None,
         top_n: 每个商品最多返回几个话题，默认 4 个（按条数从多到少）。
         example_limit: 每个话题最多给几条例句，默认 1 条。
     """
-    rows = load_reviews()
+    rows, _ = clean_rows(load_reviews())
     cfg = load_topics()
     topics = cfg["topics"]
 

@@ -15,7 +15,6 @@ KNOWN_IDS = "TWS-P3, TWS-X1, TWS-M2, OB-A6, OB-B2, OB-C9"
 
 
 def retrieve(state: AnalysisState):
-    """检索：倒着找最后一条人类消息当查询词（挂工具后尾部可能是 ToolMessage）。"""
     query = next((m.content for m in reversed(state["messages"]) if m.type == "human"), "")
     if not query:
         return {"retrieved": []}
@@ -36,12 +35,11 @@ def call_model(state: AnalysisState):
     reply = LLM_WITH_TOOLS.invoke(msgs)
     out = {"messages": [reply]}
     if getattr(reply, "tool_calls", None):
-        out["tool_rounds"] = rounds + 1      # 只在真的请求工具时计数，纯回答不消耗配额
+        out["tool_rounds"] = rounds + 1
     return out
 
 
 def route_after_agent(state: AnalysisState):
-    """成本闸：工具轮次到顶就结束，否则用官方判据决定去 tools 还是收工。"""
     if (state.get("tool_rounds") or 0) >= MAX_TOOL_ROUNDS:
         return END
     return tools_condition(state)
