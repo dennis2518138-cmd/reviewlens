@@ -29,3 +29,6 @@ def get_embedder():
 
 
 CHROMA_PATH = ROOT / os.getenv("CHROMA_PATH", "./data/chroma")
+
+CHECKPOINT_DB = ROOT / os.getenv("CHECKPOINT_DB", "./data/checkpoints.db")
+

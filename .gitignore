@@ -11,6 +11,9 @@ __pycache__/
 data/chroma/
 data/*.bak-*
 data/*.db
+# sqlite 开 WAL 模式会留这两个伴生文件，主文件规则挡不住它们
+data/*.db-wal
+data/*.db-shm
 models/
 
 # IDE / OS

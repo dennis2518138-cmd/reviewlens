@@ -63,9 +63,25 @@ python -m uvicorn app.main:app --port 8000
 ```
 
 打开 **http://127.0.0.1:8000/docs**，选 `POST /chat`、Try it out，发
-`{"message": "物流方面用户在抱怨什么？"}` —— 返回的 `reply` 里每一句都能在
-`data/reviews_raw.jsonl` 里找到出处。再发 `{"message": "保修几年？"}`，
-库里没有保修信息，正确行为是回答"评论里没有提到保修几年"（这条是 RAG 的负向验收）。
+`{"message": "物流方面用户在抱怨什么？"}`。
+
+**返回的不是成品**，而是 `status: "awaiting_review"` + 一份待审批草稿（`review.draft`），
+每一句都能在 `data/reviews_raw.jsonl` 里找到出处。报告要再走一步才算发布：
+
+```json
+POST /review  {"thread_id": "<上一步返回的单号>", "decision": "approve"}
+→ status: "published", report: "……"
+```
+
+实测 `report` 与当时审的那份草稿**逐字相同**——审的就是发的。中途刷新页面可以先查
+`GET /review/{单号}`，它不碰模型、不花钱，只告诉你这单还卡在哪个节点、草稿是什么。
+
+`thread_id` 不传就由服务端生成并随响应返回，**多轮对话必须把它带回来**，
+否则每次都是新会话（实测：共用默认单号时，第二个问题会背上第一个问题的 4 条历史，
+而且审批轮次也串了——A 连拒两次会让 B 永远拿不到报告）。
+
+再发 `{"message": "保修几年？"}`，库里没有保修信息，正确行为是回答"评论里没有提到保修几年"
+（这条是 RAG 的负向验收）。连拒两次则返回 `status: "not_published"`：被明确拒过的稿不发布。
 
 | 已知坑 | 处置 |
 |---|---|
@@ -81,7 +97,7 @@ python -m uvicorn app.main:app --port 8000
 - [x] D3 RAG 检索闭环（向量检索 + 离线评测；混合召回待做）
 - [x] D4 三个工具 + ToolNode + 工具轮次成本闸
 - [x] D5 编排器（structured output + 枚举白名单）+ 评分/话题子图并行 + fan-in 对比；结论已回灌报告节点
-- [ ] D6 SQLite 检查点 + HITL 中断恢复
+- [x] D6 SQLite 检查点 + HITL 审批中断（跨进程恢复实测；`/review` 单号协议）
 - [ ] D7 SSE 流式 + 单页前端
 - [ ] D8 Docker 部署
 - [ ] D9 评估 + 演示视频 + README 定稿
@@ -226,5 +242,58 @@ python -m uvicorn app.main:app --port 8000
 - ⚠️ 一类新 bug：_judge 抄错成 facts.get('question','') ⇒ 永远取到空串、**一行代码都不报错**，
   模型照样返回 finding/numbers，但它是在回答"没有问题"。只能靠"结论是否切题"发现，报错帮不上忙
 - 命名遗留（已知不修）：compare 实际做"比较 + 跨口径综合判断"，名字只体现了前者；靠 docstring 兜
+
+2026-11-19 D6 完成（SqliteSaver 检查点 + interrupt 审批 + /review 协议）
+- 前置探针 scripts/probe_hitl_checkpoint.py（零 LLM、七组，秒级）实测出七条 API 形状，全项目按它写：
+  ① 中断时 invoke 返回 {'__interrupt__', 'draft', ...}，**draft 一并带出**（/chat 因此一次请求就够）
+  ② SqliteSaver.from_conn_string 返回 Iterator ⇒ 是上下文管理器，with 结束就关连接，服务不能这么用
+  ③ check_same_thread=True 时线程池三个请求全 ProgrammingError（实测），False 才通 ⇒ 连接进程级单例
+  ④ ⚠️ **没配 checkpointer 时第一次 invoke 不报错、照样返回 __interrupt__，直到 resume 才 RuntimeError**
+     ⇒ interrupt 与 checkpointer 必须同批上线，症状是"审批框弹得出、点通过永远报错"
+  ⑤ 换连接、全新 checkpointer 实例读同一个 .db：values 在、next=('review',)、中断 payload 还在、
+     新进程 resume 成功（.db 仅 20KB）⇒ "刷新页面恢复现场"的通路证明，不用上 Postgres
+  ⑥ compiled 子图内 interrupt 能冒到父图、resume 也正常（1.2.20 实测）⇒ 与 issue #4879 的
+     RemoteGraph 不是一回事；但透传 config 能让子图有自己的检查点，resume 时不必从头重跑子图
+  ⑦ Command 当 resume 值传进去不会自动生效——**回环必须由节点自己 return Command(goto=...)**
+- 静默失忆实测：config 少套一层 configurable（写成 {'thread_id':...}）时 **invoke 不报错但每次都是新会话**，
+  只有 get_state 才 KeyError: 'configurable' ⇒ config 形状收进 _cfg() 一个函数，三处共用一份
+- ⚠️ **字段写错位置的静默失败**：把 review_note/review_rounds 粘在模块顶层（合法 Python 语句！）而不是
+  class 体内，TypedDict 就没这两个字段；节点写入被**静默丢弃**，review_rounds 永远是 None，
+  于是 reject 无限回环直到 recursion_limit。判据：新增 state 字段后用 get_type_hints 当场验，别信"我加了"
+- ⚠️ 同理 `Command`/`HumanMessage` 用在**函数体内**时，模块能 import 成功≠代码没问题：
+  只有真走到那条分支才 NameError。"import 得过"不能作为验收，要么 lint(pyflakes) 要么跑那条路径
+- reject 回环三种喂法的对照实测（同图同问题，一次只动一个变量）：
+  审核意见只写 state 字段（模型不读）→ 与原文相似度 **0.93**，结构结论没动（近似复述）
+  意见追加进 messages            → 相似度 **0.16**，真重写
+  ⇒ 推论：写进 state ≠ 送进模型。留痕字段与生效输入要分开（review_note 留痕 / HumanMessage 生效）
+- ⚠️ **今天最漂亮的一条**：审核意见带具体选项诱导（"是电池虚标、芯片还是降噪算法？"），而数据里没有
+  这类证据，模型的新草稿第一句是「无法指出具体原因，因为现有证据不支持这种归因」
+  ⇒ **HITL 的人工压力没有把模型带成编造以满足审批人**。这条比 README 里任何一句"我们防幻觉"都有说服力
+- 多口径冲突实测（第一次出现于 D5，本轮进接口）：评分口径说 M2 更差(3.47<3.71)、话题口径说 X1 更差
+  (续航均分 3.20<3.38)，两个都对 ⇒ CONFLICT_RULE 写进汇总节点提示词，要求两个口径分别讲清、不许只挑一个
+- 审批出口必须全：agent 的两条离开路径（无 tool_calls / 轮次闸命中）**都要经过 human_review**。
+  只改一条的话"工具用满 2 轮"那一类答案会绕过人工审核直接输出，平时看不出来（多数问题走另一条）
+- 接口协议三条实测：/chat 返回 awaiting_review 且**没有 reply 键**；GET /review/{单号} 不调模型就能
+  恢复现场（pending=True、next_nodes=['human_review']、draft 与刚才逐字相同）；approve 后 report 470 字
+  **与审的那份草稿完全相等**（审的就是发的）
+- ⚠️ 修掉一个"接口旁路审批"的真 bug：旧 /chat 返回 messages[-1]，实测 HTTP 200 给出整份草稿而
+  图实际卡在 human_review、report=None ⇒ **只有 report 算发布物**，_outcome() 三分支统一翻译结局
+- 会话串号实测：thread_id 默认 'default' 时第二个问题背上第一个问题的 4 条历史；串号更严重的后果是
+  review_rounds 共用 ⇒ A 连拒两次会让 B 永远拿不到报告。改为服务端 uuid 发号 + 响应带回 + 前端回传
+- 重复审批：给不处于待审批的会话发 resume，LangGraph **不报错、当成新一轮输入继续跑并继续花钱**
+  ⇒ /review 先查 st.next，空则 409（实测 ghost 单 409、批完再批 409，两次都没调模型）
+- decision 白名单必须查：'mayb' 不等于 'approve' 就会走 reject 分支，**一次拼写错误变成一次正式拒绝、
+  还吃掉一次重写机会** ⇒ 422 当场挡
+- 硬闸语义定案：MAX_REVIEW_ROUNDS=2（最多审 2 次、最多重写 1 次），命中时**不写 report**——
+  宁可不发布也不发布一份被明确拒过的稿；且必须补一条 AIMessage 收口，否则 detail 回显的是
+  审批人自己写的「还是不行」，用户看不到解释（实测到过，已修）
+- ⚠️ "耗时"从 D6 起有两种口径：LLM 净时间 / 含人工等待的墙钟时间。本轮 D6-④ 验收墙钟 196s、
+  D6-③ 单轮 >600s，都含程序代填 resume 的间隔 ⇒ 简历里"首字响应 6s→0.8s""45s→18s"这类句子
+  **必须注明口径**，否则面试官一问"包不包括人点按钮的时间"就等于数字是编的
+- 安全边界（演示项目明确不做，但要主动说）：/review 与 GET /review/{单号} 均无鉴权，
+  thread_id（12 位 hex = 48bit）即能力凭证，拿到就能看草稿、点通过。生产需三件套：绑登录态、
+  审批校验 request_id 且一次性消费、审批接口加幂等键
+- D5 遗留债清了：last_question 收进 state.py（原先 4 个文件各抄一份 next(...)）；
+  compare 无评分数据时 return {} 不产出 {worst: None}，前端不用渲染 "None"
 -->
 

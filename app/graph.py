@@ -3,11 +3,13 @@ import json
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_core.messages import SystemMessage
-
+from langgraph.types import Command
+from langchain_core.messages import HumanMessage
 from app.config import get_llm
 from app.rag import search
 from app.state import AnalysisState, last_question
 from app.tools import clean_data, keyword_extract, sentiment_stats
+from app.hitl import human_review
 
 from app.orchestrator import KNOWN_IDS, plan_tasks, route_by_plan
 from app.workers import attach, compare, rating_subgraph, topic_subgraph
@@ -70,12 +72,13 @@ def call_model(state: AnalysisState):
 
 
 def route_after_agent(state: AnalysisState):
+
     if (state.get("tool_rounds") or 0) >= MAX_TOOL_ROUNDS:
-        return END
-    return tools_condition(state)
+        return "human_review"
+    return {"tools": "tools", "__end__": "human_review"}[tools_condition(state)]
 
 
-def build_graph():
+def build_graph(checkpointer=None):
     builder = StateGraph(AnalysisState)
     builder.add_node("retrieve", retrieve)
     builder.add_node("orchestrator", plan_tasks)
@@ -84,6 +87,7 @@ def build_graph():
     builder.add_node("compare", compare)
     builder.add_node("agent", call_model)
     builder.add_node("tools", ToolNode(TOOLS))
+    builder.add_node("human_review", human_review)
 
     builder.add_edge(START, "retrieve")
     builder.add_edge("retrieve", "orchestrator")
@@ -93,7 +97,7 @@ def build_graph():
     builder.add_edge("topic_analysis", "compare")
     builder.add_edge("compare", "agent")
 
-    builder.add_conditional_edges("agent", route_after_agent,
-                                  {"tools": "tools", "__end__": END})
+    builder.add_conditional_edges("agent", route_after_agent, ["tools", "human_review"])
     builder.add_edge("tools", "agent")
-    return builder.compile()
+    builder.add_edge("human_review", END)
+    return builder.compile(checkpointer=checkpointer)

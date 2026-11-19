@@ -1,6 +1,7 @@
 from typing import Annotated, TypedDict
 from langgraph.graph import add_messages
 
+
 def merge_dict(old: dict | None, new: dict | None) -> dict:
     out = dict(old or {})
     out.update(new or {})
@@ -15,6 +16,8 @@ class AnalysisState(TypedDict):
     sentiment: Annotated[dict, merge_dict]
     comparison: dict
     report: str
+    review_note: str        # 人写的审核意见（只留痕，节点不读它——读的是 messages 里那条）
+    review_rounds: int      # 已 reject 几次，硬闸用
 
 
 def last_question(state: AnalysisState) -> str:
