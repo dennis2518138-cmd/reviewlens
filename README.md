@@ -328,13 +328,26 @@ curl -N "http://127.0.0.1:8000/review/stream?thread_id=<上一步的单号>&deci
 - ⚠️ **测流式必须用真 HTTP**：用 `httpx` 的 `ASGITransport` 进程内直连，所有事件时间戳全挤成同一个
   `5.03s`，看着像"首字 5 秒"，真相是它把整个响应缓冲完了再交给我，**压根测不出流**。
   起真 uvicorn 才拿到 `0.00 / 0.01 / 1.55 / 3.33 / 5.08` 的分散时间轴 + `content-type: text/event-stream`
+- 心跳 `EventSourceResponse(gen(), ping=15)`：⚠️ **这条是"按已知风险预防"，不是实测过**——
+  现在链路最长空窗（judge 结束到 agent 首字）实测 0.77s，够不到 15 秒，所以那行 `event: ping`
+  我一次都没抓到过。写进简历只能写"加了 SSE 心跳以防反代掐流"，**不能写成实测**。
+  之所以值得加：历史上真在同源场景翻过车（tailscale/DERP 把流式长连接拖成 0 字节挂起）
 - `sse-starlette` 的 `ServerSentEvent.encode()` 源码只对 `data` 做 `str()`、**不做 JSON 序列化**：
   直接给 dict 会发出 `data: {'thread_id': 'x'}`（单引号），浏览器 `JSON.parse` 当场抛。
   修在传输层 `_sse()`，`streaming.py` 继续返回结构化字典——将来换 WebSocket 不用改它
 - **「必填」不等于「非空」**：`message: str` 允许空串，上一版空问题一路跑完整条图（HTTP 200、
   5 次 LLM 调用全烧）。`_check_message()` 才是闸，`/chat` 与 `/chat/stream` 共用同一条
+- ⚠️ **路由抢占是这个项目第二次踩同一类坑**：`GET /review/stream` 写在
+  `GET /review/{thread_id}` 之后就会被**模式抢走**——`{thread_id}` 能匹配任何值，包括字符串
+  `stream`。实测响应体是 `{"thread_id":"stream","pending":false}` + `content-type: application/json`，
+  **HTTP 200、新端点一次都没执行**。FastAPI/Starlette 按注册顺序取第一条匹配，所以
+  **字面量路由必须注册在模式路由之前**，`mount("/")` 更是必须放最后（否则把 `/chat/stream` 全吞掉）。
+  D2 那次是 `/health` vs `/status` 撞车，同一条规矩：**宽的模式写后面**
 - 客户端关页面真能省钱（实测）：第 3 个事件后断开 → `next_nodes` 停在 `['orchestrator']`，
   **再等 8 秒仍是 `['orchestrator']`、没到审批** ⇒ `aclose()` 确实取消了图，后面 4-5 次调用没烧。
+  实现要点：`stream_run(...).__aiter__()` 拿到迭代器本体 + `while True: await anext(it)`（手写 `async for`），
+  只为每取一条前查一次 `await request.is_disconnected()`；`finally: await it.aclose()` 三条退出路径
+  （跑完/断开/异常）都要走到。**只 `async for` 然后 break 是不行的**——底层生成器没人关，图继续跑。
   判据用 `aget_state` 读"跑到哪个节点"，不用往生产代码里塞计数器
 - 审批三种结局都能走同一条流（实测，这是前端只留一套状态机的依据）：`approve` → **0 段 delta、0.51s、
   `run.completed{published}`**（批准不重跑模型，直接把 `report` 给你）；`reject` → 573 段实时重写 +
