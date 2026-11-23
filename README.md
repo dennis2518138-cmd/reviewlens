@@ -76,6 +76,24 @@ POST /review  {"thread_id": "<上一步返回的单号>", "decision": "approve"}
 实测 `report` 与当时审的那份草稿**逐字相同**——审的就是发的。中途刷新页面可以先查
 `GET /review/{单号}`，它不碰模型、不花钱，只告诉你这单还卡在哪个节点、草稿是什么。
 
+不想翻 `/docs` 就直接开首页 **http://127.0.0.1:8000/** —— 前端是 `web/index.html` **一个文件**
+（324 行，无框架无构建），由 `app.mount` 挂在 `/`，同源所以不需要开 CORS。输入问题就能看到
+6 行中文进度、逐字打字机、审批面板和两个按钮。它走的是一条 SSE，事件名就是协议：
+
+```cmd
+:: 浏览器原生 EventSource 只能发 GET，所以参数全在问号后面（中文要编码）
+curl -N "http://127.0.0.1:8000/chat/stream?message=%E7%89%A9%E6%B5%81%E6%80%8E%E4%B9%88%E6%A0%B7"
+curl -N "http://127.0.0.1:8000/review/stream?thread_id=<上一步的单号>&decision=reject&note=%E8%A1%A5%E8%AF%81%E6%8D%AE"
+
+:: 事件序列（实测一次提问）
+:: run.started{thread_id} → node.progress ×6 → tool.progress ×1
+::   → assistant.delta ×182 → review.required{draft,round:1/2}
+:: 再点「通过」：run.started → node.progress ×1 → run.completed{published}   ← 0 段 delta、0.51s
+```
+
+真浏览器端到端实测（Chrome + CDP 真点按钮）：**提问 4.61s 出审批、拒绝 3.58s 实时重写 573 段、
+通过 0.51s 发布**；整场 `EventSource` 实例数恰好 3（一次提问/一次拒绝/一次通过），页面 JS 异常 0。
+
 `thread_id` 不传就由服务端生成并随响应返回，**多轮对话必须把它带回来**，
 否则每次都是新会话（实测：共用默认单号时，第二个问题会背上第一个问题的 4 条历史，
 而且审批轮次也串了——A 连拒两次会让 B 永远拿不到报告）。
@@ -98,7 +116,7 @@ POST /review  {"thread_id": "<上一步返回的单号>", "decision": "approve"}
 - [x] D4 三个工具 + ToolNode + 工具轮次成本闸
 - [x] D5 编排器（structured output + 枚举白名单）+ 评分/话题子图并行 + fan-in 对比；结论已回灌报告节点
 - [x] D6 SQLite 检查点 + HITL 审批中断（跨进程恢复实测；`/review` 单号协议）
-- [ ] D7 SSE 流式 + 单页前端
+- [x] D7 SSE 流式（v2 协议 + 双层事件过滤 + 心跳 + 断连取消）+ 单页前端（真浏览器端到端实测）
 - [ ] D8 Docker 部署
 - [ ] D9 评估 + 演示视频 + README 定稿
 
@@ -295,5 +313,44 @@ POST /review  {"thread_id": "<上一步返回的单号>", "decision": "approve"}
   审批校验 request_id 且一次性消费、审批接口加幂等键
 - D5 遗留债清了：last_question 收进 state.py（原先 4 个文件各抄一份 next(...)）；
   compare 无评分数据时 return {} 不产出 {worst: None}，前端不用渲染 "None"
+- SSE 选 v2 不选 v3（两条都实测）：v3 更顺手（`stream.messages` 直接给文字，274 段 / 首字 3.40s），
+  但异步下 `astream_events(version="v3")` 返回 coroutine（不 `await` 就是 0 token +
+  `coroutine 'Pregel._apregel_stream_v3' was never awaited`），`interrupted/interrupts/output` 是**方法**不是属性，
+  带 `The v3 streaming protocol on Pregel is experimental`，**而且没有节点进度事件**——3.3 秒白屏填不掉。
+  v2 同时有 token 流和 `on_chain_start` 全节点顺序，所以选 v2，v3 记成迁移路径
+- token 必须按节点过滤（实测拆分）：一次请求 `on_chat_model_stream` 共 **663 段**，`agent` 只占 **277**，
+  `judge` 197 / `compare` 148 / `orchestrator` 41 = **58% 是结构化输出的 JSON 碎片**。不过滤前端答案区
+  会先飘出半截 `{"workers": ["rating...`。这条和 D6「只有 `report` 算发布物」是同一原则的两半
+- 进度事件也要过滤，而且判据必须是 `name == node`、**不能用 seen 集合去重**（实测）：一次请求里
+  `node` 落在标签表的 `on_chain_start` 有 **11 条但唯一节点只有 6 个**，多出的 5 条来自节点内部多层 chain
+  （`RunnableSequence`、`_check_refusal`、子图 `LangGraph`，**连条件路由函数 `route_by_plan` /
+  `route_after_agent` 也各报一次**）。用"见过就跳过"去重会把 reject 回环里 `agent` 的第二次真运行吞掉
+- ⚠️ **测流式必须用真 HTTP**：用 `httpx` 的 `ASGITransport` 进程内直连，所有事件时间戳全挤成同一个
+  `5.03s`，看着像"首字 5 秒"，真相是它把整个响应缓冲完了再交给我，**压根测不出流**。
+  起真 uvicorn 才拿到 `0.00 / 0.01 / 1.55 / 3.33 / 5.08` 的分散时间轴 + `content-type: text/event-stream`
+- `sse-starlette` 的 `ServerSentEvent.encode()` 源码只对 `data` 做 `str()`、**不做 JSON 序列化**：
+  直接给 dict 会发出 `data: {'thread_id': 'x'}`（单引号），浏览器 `JSON.parse` 当场抛。
+  修在传输层 `_sse()`，`streaming.py` 继续返回结构化字典——将来换 WebSocket 不用改它
+- **「必填」不等于「非空」**：`message: str` 允许空串，上一版空问题一路跑完整条图（HTTP 200、
+  5 次 LLM 调用全烧）。`_check_message()` 才是闸，`/chat` 与 `/chat/stream` 共用同一条
+- 客户端关页面真能省钱（实测）：第 3 个事件后断开 → `next_nodes` 停在 `['orchestrator']`，
+  **再等 8 秒仍是 `['orchestrator']`、没到审批** ⇒ `aclose()` 确实取消了图，后面 4-5 次调用没烧。
+  判据用 `aget_state` 读"跑到哪个节点"，不用往生产代码里塞计数器
+- 审批三种结局都能走同一条流（实测，这是前端只留一套状态机的依据）：`approve` → **0 段 delta、0.51s、
+  `run.completed{published}`**（批准不重跑模型，直接把 `report` 给你）；`reject` → 573 段实时重写 +
+  `review.required{round:2}`；连拒两次 → `run.completed{not_published, report: None}`
+- ⚠️ LangGraph 在 `resume` 时会**把 `human_review` 整个节点从头重跑**（实测：拒绝后进度条是
+  「等待人工审批 → 撰写报告 → 等待人工审批」三行）。所以 **`interrupt` 之前不许放任何副作用**
+  （写库、扣款、发通知），否则一次审批 = 两次副作用
+- 前端只留两个状态（`es`、`tid`），「要不要审批 / 发布没发布」全由后端事件驱动；终态判据用
+  `status` **不用 `report.length`**（实测 `not_published` 时 `report` 是 `None`，判 `.length` 当场 TypeError）
+- 模型输出是 Markdown，不渲染就会在页面上看到 `##` `**` `|---|` 一堆裸标记（截图实测到过，表格完全不可读）。
+  `mdLite` **先 `esc` 再加标签**（所以模型吐 `<script>` 也只显示成文字），打字机用 `requestAnimationFrame`
+  把 573 段合并成每秒 ≤60 次重排。字数有两个口径：**存档 1065 字 / 渲染后可见 814 字**，逐项复算
+  （星号 12 + 分隔行 43 + 标题符 18 + 竖线 59 + 换行 33 + 格内空格 90 = 255）预测 810、实测 814 ⇒ 没丢内容
+- 本轮我自己制造的两个事故（记下来免得重犯）：① **一次三段切片"挪路由顺序"**，结果 `src[end:i]` 是空串
+  （`end > i`）、查状态段被重复粘贴、`/chat/stream` 整段丢失，且 git 救不回（HEAD 还没流式端点）——
+  纯移动代码必须拆成"删+插"两步、各带断言；② 删 `draft` 元素时漏了一行 `els.draft.scrollTop`，
+  导致 `renderReview` 抛错、`done()` 里的 `es.close()` 永不执行 ⇒ **流不关 + 浏览器自动重连 = 反复重跑分析**。
+  **一个 UI 小改动能引发成本事故**，这就是前端也要端到端测的理由
 -->
-

@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReviewLens · 电商评论洞察</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    font: 15px/1.7 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: #f6f7f9; color: #16181d;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+  h1 { font-size: 20px; margin: 0; }
+  #tid { font: 12px/1 ui-monospace, Consolas, monospace; color: #6b7280; }
+  .card { background: #fff; border: 1px solid #e3e6ea; border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 13px; margin: 0 0 10px; color: #6b7280; font-weight: 600; letter-spacing: .04em; }
+  .ask { display: flex; gap: 8px; }
+  #q { flex: 1; padding: 10px 12px; border: 1px solid #d4d8de; border-radius: 8px; font: inherit; }
+  #q:focus { outline: 2px solid #2f6fed; outline-offset: -1px; border-color: #2f6fed; }
+  button { padding: 10px 16px; border: 0; border-radius: 8px; font: inherit; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .primary { background: #2f6fed; color: #fff; }
+  .ok { background: #128a5a; color: #fff; }
+  .no { background: #fff; color: #b42318; border: 1px solid #f0c4c0; }
+  #steps { list-style: none; margin: 0; padding: 0; }
+  #steps li { padding: 4px 0; color: #9aa1ab; display: flex; gap: 8px; align-items: baseline; }
+  #steps li::before { content: "○"; font-size: 11px; }
+  #steps li.now { color: #16181d; font-weight: 600; }
+  #steps li.now::before { content: "◉"; color: #2f6fed; }
+  #steps li.done { color: #4b5563; }
+  #steps li.done::before { content: "●"; color: #128a5a; }
+  #steps li .sub { font: 11px/1 ui-monospace, Consolas, monospace; color: #2f6fed; font-weight: 400; }
+  #answer { word-break: break-word; min-height: 26px; color: #1f2329; }
+  #answer .ln { margin: 0 0 .38em; }
+  #answer .ln.gap { min-height: .5em; }
+  #answer .trow { display: flex; gap: 6px; margin: 0 0 4px; }
+  #answer .tcell { flex: 1 1 0; background: #f8f9fb; border: 1px solid #e8ebf0; border-radius: 5px;
+                   padding: 4px 7px; font-size: 13px; }
+  #answer .tcell.k { flex: 0 0 auto; min-width: 92px; max-width: 190px; background: #eef2f8; font-weight: 600; }
+  #answer .tcell.h { background: #eef2f8; font-weight: 600; }
+  #answer strong { color: #0f172a; }
+  .field { margin-bottom: 10px; }
+  .field b { display: block; font-size: 12px; color: #6b7280; margin-bottom: 3px; font-weight: 600; }
+  .quote { background: #f8f9fb; border-left: 3px solid #c9d3e0; padding: 8px 10px; border-radius: 0 6px 6px 0;
+           white-space: pre-wrap; word-break: break-word; }
+  #draft { max-height: 320px; overflow: auto; border-left-color: #2f6fed; }
+  .pair { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pair > div { flex: 1 1 240px; }
+  #note { width: 100%; min-height: 62px; padding: 9px 11px; border: 1px solid #d4d8de; border-radius: 8px;
+          font: inherit; resize: vertical; }
+  .row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+  #round { font-size: 12px; color: #6b7280; margin-left: auto; }
+  #banner { padding: 11px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 14px; }
+  #banner.pub { background: #e7f5ee; border: 1px solid #b5e0c9; color: #0e6b46; }
+  #banner.rej { background: #fdecec; border: 1px solid #f5c9c4; color: #a4271c; }
+  #banner.err { background: #fff5e5; border: 1px solid #f3d9ac; color: #8a5a13; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>ReviewLens</h1>
+    <span id="tid">未开始</span>
+  </header>
+
+  <div id="banner" hidden></div>
+
+  <div class="card">
+    <h2>问一句</h2>
+    <div class="ask">
+      <input id="q" placeholder="例如：物流方面用户在抱怨什么？" autocomplete="off">
+      <button id="send" class="primary">发送</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>流程</h2>
+    <ol id="steps"></ol>
+  </div>
+
+  <div class="card">
+    <h2>内容</h2>
+    <div id="answer"></div>
+  </div>
+
+  <div class="card" id="review" hidden>
+    <h2>人工审批</h2>
+    <div class="field"><b>原问题</b><div class="quote" id="asked"></div></div>
+    <div class="field"><b>待批准的草稿</b><div class="quote" id="draftRef"></div></div>
+    <div class="field pair">
+      <div><b>支撑最强的评论</b><div class="quote" id="best"></div></div>
+      <div><b>最反对的评论</b><div class="quote" id="worst"></div></div>
+    </div>
+    <div class="field"><b>审核意见（拒绝时必填，模型只看得到这里）</b>
+      <textarea id="note" placeholder="例如：请写明结论依据的是哪几条评论，并把两个口径的冲突说清楚"></textarea>
+    </div>
+    <div class="row">
+      <button id="ok" class="ok">通过并发布</button>
+      <button id="no" class="no">拒绝，按意见重写</button>
+      <span id="round"></span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const els = {
+  tid: $("tid"), steps: $("steps"), answer: $("answer"), review: $("review"),
+  asked: $("asked"), draftRef: $("draftRef"), best: $("best"), worst: $("worst"),
+  note: $("note"), banner: $("banner"), send: $("send"), q: $("q"),
+  ok: $("ok"), no: $("no"), round: $("round"),
+};
+
+// 前端只自己记两样：这条流的连接对象、这单的单号。
+// 「要不要审批」「发布没发布」一律由后端事件决定，前端不猜。
+let es = null;
+let tid = null;
+
+function setBusy(on) {
+  els.send.disabled = on;
+  els.ok.disabled = on;
+  els.no.disabled = on;
+}
+
+function banner(cls, text) {
+  els.banner.hidden = !text;
+  els.banner.className = cls || "";
+  els.banner.textContent = text || "";
+}
+
+// 进度条：一条节点一行。新节点进来时，上一行落定为 done。
+function step(label) {
+  const prev = els.steps.querySelector("li.now");
+  if (prev) { prev.classList.remove("now"); prev.classList.add("done"); }
+  const li = document.createElement("li");
+  li.className = "now";
+  li.append(label);
+  els.steps.append(li);
+}
+
+function toolNote(name) {
+  const now = els.steps.querySelector("li.now");
+  if (!now) return;
+  const s = document.createElement("span");
+  s.className = "sub";
+  s.textContent = "已查 " + name;
+  now.append(s);
+}
+
+// 打字机：先攒进 raw，再用 requestAnimationFrame 每帧渲染一次。
+// 为什么不每段直接 innerHTML：907 字要重排 573 次；一帧一次就够，肉眼看不出差别。
+let raw = "";
+let raf = 0;
+
+// 只做「转义 + 加标签」，标签全部由我们自己拼，所以模型输出里的 <script> 只会显示成文字。
+function esc(s) {
+  return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+}
+
+function inline(s) {
+  return esc(s)
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*]+)\*(?![*])/g, "$1<em>$2</em>");
+}
+
+// 模型输出的是 Markdown。不渲染的话 ## ** |---| 会原样出现在页面上（截图实测到）。
+// 这里只处理四种：# 标题、**粗体**、- 列表、| 表格（分隔行 |---| 丢掉，其余按单元格排）。
+function mdLite(text) {
+  const out = [];
+  let tableRun = 0;      // 连续表格行的序号：第一行当表头渲染
+  for (const line of text.split("\n")) {
+    if (/^\s*\|[\s:|-]+\|\s*$/.test(line)) continue;          // |---|---|
+    if (/^\s*\|.*\|\s*$/.test(line)) {
+      tableRun++;
+      const cells = line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|");
+      const row = cells.map((c, i) =>
+        '<span class="tcell' + (i === 0 ? " k" : "") + (tableRun === 1 ? " h" : "") + '">' +
+        inline(c.trim()) + "</span>").join("");
+      out.push('<div class="trow">' + row + "</div>");
+      continue;
+    } else if (tableRun) {
+      tableRun = 0;      // 表格结束
+    }
+    const h = line.match(/^\s*(#{1,4})\s*(.*)$/);
+    if (h) { out.push('<p class="ln"><strong>' + inline(h[2]) + "</strong></p>"); continue; }
+    const li = line.match(/^\s*[-*]\s+(.*)$/);
+    if (li) { out.push('<p class="ln">• ' + inline(li[1]) + "</p>"); continue; }
+    if (!line.trim()) { out.push('<p class="ln gap"></p>'); continue; }
+    out.push('<p class="ln">' + inline(line) + "</p>");
+  }
+  return out.join("");
+}
+
+function renderAnswer() {
+  raf = 0;
+  els.answer.innerHTML = mdLite(raw);
+}
+
+function answerAppend(text) {
+  raw += text;
+  if (!raf) raf = requestAnimationFrame(renderAnswer);   // 一帧只重排一次
+}
+
+function answerSet(text) {
+  raw = text || "";
+  if (raf) { cancelAnimationFrame(raf); raf = 0; }
+  renderAnswer();
+}
+
+function renderReview(d) {
+  els.asked.textContent = d.asked || "";
+  // 草稿正文已经在上面「内容」区逐字打出来了，这里再放一份就是 907 字重复两遍。
+  els.draftRef.textContent = "共 " + (d.draft || "").length +
+    " 字，已在上方「内容」区逐字显示，可直接滚动核对。";
+  els.best.textContent = d.best || "（无）";
+  els.worst.textContent = d.worst || "（无）";
+  els.round.textContent = "第 " + d.round + " / " + d.max_rounds + " 轮";
+  els.review.hidden = false;
+}
+
+function settleSteps(finalLabel, cls) {
+  // 终态时把还在"进行中"的行落定，再补一行结果。
+  // 不这么做的话：横幅写着「已发布」，进度条最后一行还高亮着「等待人工审批」——自相矛盾。
+  els.steps.querySelectorAll("li.now").forEach((li) => {
+    li.classList.remove("now"); li.classList.add("done");
+  });
+  const li = document.createElement("li");
+  li.className = "done";
+  li.textContent = finalLabel;
+  if (cls) li.style.color = cls;
+  els.steps.append(li);
+}
+
+function renderDone(d) {
+  if (d.status === "published") {
+    // report 在 not_published 时是 null，所以判据必须是 status，不能判 report 长度。
+    answerSet(d.report || "");
+    banner("pub", "已发布 · 单号 " + (d.thread_id || tid || "") +
+      " · " + (d.report ? d.report.length : 0) + " 字");
+    settleSteps("已发布", "#128a5a");
+  } else {
+    banner("rej", "两轮审核未通过，本报告不予发布。已保留草稿与审核意见，可换口径重新提问。");
+    settleSteps("两轮未通过，未发布", "#b42318");
+  }
+  els.review.hidden = true;
+}
+
+function fail(d) {
+  settleSteps("运行中断", "#b42318");
+  banner("err", "运行失败：" + (d && d.error ? d.error : "未知错误") +
+    (d && d.detail ? "（" + d.detail + "）" : ""));
+  els.review.hidden = true;
+}
+
+function failNet() {
+  banner("err", "连接中断。已停止接收，避免浏览器自动重连把分析再跑一遍。");
+}
+
+function openStream(url) {
+  if (es) { es.close(); es = null; }          // 上一条没关会一直挂着，而且浏览器会自动重连
+  setBusy(true);
+  banner("");
+  els.steps.textContent = "";
+  answerSet("");                               // 拒绝重写前必须清空，否则新旧叠成一坨
+  els.review.hidden = true;
+  els.tid.textContent = tid ? "单号 " + tid : "分配中…";
+
+  es = new EventSource(url);
+  // done(...) 包一层：终局事件处理完立刻 close。EventSource 断线会自动重连，
+  // 服务端每接一条就是一次完整跑图（5-6 次模型调用），绝不能留着。
+  const done = (fn) => (e) => {
+    let d = {};
+    try { d = JSON.parse(e.data); } catch (err) { /* 坏数据只丢这一段，不断整条流 */ }
+    fn(d);
+    if (es) { es.close(); es = null; }
+    setBusy(false);
+  };
+
+  es.addEventListener("run.started", (e) => {
+    const d = JSON.parse(e.data);
+    tid = d.thread_id;
+    els.tid.textContent = "单号 " + tid;
+  });
+  es.addEventListener("node.progress", (e) => step(JSON.parse(e.data).label));
+  es.addEventListener("tool.progress", (e) => toolNote(JSON.parse(e.data).tool));
+  es.addEventListener("assistant.delta", (e) => answerAppend(JSON.parse(e.data).text));
+  es.addEventListener("review.required", done(renderReview));
+  es.addEventListener("run.completed", done(renderDone));
+  es.addEventListener("run.failed", done(fail));
+  es.onerror = () => { if (es) { es.close(); es = null; } failNet(); setBusy(false); };
+}
+
+els.send.onclick = () => {
+  const msg = els.q.value.trim();
+  if (msg.length < 2) { banner("err", "问题至少写两个字，例如「物流」。"); return; }
+  tid = null;                        // 新单号由服务端发，别拿上一单的去提问
+  openStream("/chat/stream?message=" + encodeURIComponent(msg));
+};
+
+els.q.addEventListener("keydown", (e) => { if (e.key === "Enter") els.send.click(); });
+
+els.ok.onclick = () => {
+  if (!tid) { banner("err", "没有单号，无法审批。"); return; }
+  els.note.value = "";               // 通过不需要意见，清空免得留下误导性的残留
+  openStream("/review/stream?thread_id=" + encodeURIComponent(tid) + "&decision=approve");
+};
+
+els.no.onclick = () => {
+  if (!tid) { banner("err", "没有单号，无法审批。"); return; }
+  const note = els.note.value.trim();
+  if (note.length < 4) { banner("err", "拒绝必须写意见（至少 4 个字）——模型只看得到这一栏。"); return; }
+  openStream("/review/stream?thread_id=" + encodeURIComponent(tid) +
+             "&decision=reject&note=" + encodeURIComponent(note));
+};
+</script>
+</body>
+</html>

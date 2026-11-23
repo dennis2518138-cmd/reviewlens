@@ -1,16 +1,34 @@
+import json
 import uuid
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from langgraph.types import Command
 from pydantic import BaseModel
 
 from app.graph import build_graph
-from app.persistence import get_checkpointer
-
-app = FastAPI(title="ReviewLens", version="0.3.0")
-graph = build_graph(get_checkpointer())
+from app.persistence import checkpoint_lifespan
+from fastapi import Request
+from sse_starlette.sse import EventSourceResponse
+from app.streaming import stream_run
 
 RECURSION_LIMIT = 20
+
+graph = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global graph
+    async with checkpoint_lifespan() as saver:
+        graph = build_graph(saver)
+        yield
+    graph = None
+
+
+app = FastAPI(title="ReviewLens", version="0.4.0", lifespan=lifespan)
 
 
 class ChatIn(BaseModel):
@@ -26,6 +44,29 @@ class ReviewIn(BaseModel):
 
 def _cfg(thread_id: str) -> dict:
     return {"recursion_limit": RECURSION_LIMIT, "configurable": {"thread_id": thread_id}}
+
+
+def _g():
+    if graph is None:
+        raise HTTPException(
+            status_code=503,
+            detail="服务没按 lifespan 启动：uvicorn 直接跑不会这样；"
+                   "TestClient 必须 `with TestClient(app) as c:`，否则建图的那段不会执行")
+    return graph
+
+
+def _check_message(message: str) -> str:
+
+    text = (message or "").strip()
+    if len(text) < 2:
+        raise HTTPException(status_code=422, detail="问题太短，至少写两个字，例如「物流」")
+    return text
+
+
+def _sse(part: dict) -> dict:
+
+    return {"event": part["event"],
+            "data": json.dumps(part["data"], ensure_ascii=False, default=str)}
 
 
 def _outcome(result: dict, thread_id: str) -> dict:
@@ -49,37 +90,106 @@ def health():
 
 
 @app.post("/chat")
-def chat(body: ChatIn):
+async def chat(body: ChatIn):
+    message = _check_message(body.message)
     tid = body.thread_id or uuid.uuid4().hex[:12]
     try:
-        result = graph.invoke({"messages": [("user", body.message)]}, config=_cfg(tid))
+        result = await _g().ainvoke({"messages": [("user", message)]}, config=_cfg(tid))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"分析中断：{type(e).__name__}") from e
     return _outcome(result, tid)
 
 
 @app.post("/review")
-def review(body: ReviewIn):
-    from langgraph.types import Command
+async def review(body: ReviewIn):
     if body.decision not in ("approve", "reject"):
         raise HTTPException(status_code=422, detail="decision 只能是 approve 或 reject")
-    st = graph.get_state(_cfg(body.thread_id))
+    st = await _g().aget_state(_cfg(body.thread_id))
     if not st.next:
         raise HTTPException(status_code=409, detail="这个会话没有待审批的草稿（已结束或不存在）")
     try:
-        result = graph.invoke(Command(resume={"decision": body.decision, "note": body.note}),
-                               config=_cfg(body.thread_id))
+        result = await _g().ainvoke(
+            Command(resume={"decision": body.decision, "note": body.note}),
+            config=_cfg(body.thread_id))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"恢复失败：{type(e).__name__}") from e
     return _outcome(result, body.thread_id)
 
 
+@app.get("/review/stream")
+async def review_stream(request: Request, thread_id: str, decision: str, note: str = ""):
+    if decision not in ("approve", "reject"):
+        raise HTTPException(status_code=422, detail="decision 只能是 approve 或 reject")
+    g = _g()
+    st = await g.aget_state(_cfg(thread_id))
+    if not st.next:
+        raise HTTPException(status_code=409, detail="这个会话没有待审批的草稿（已结束或不存在）")
+
+    payload = Command(resume={"decision": decision, "note": note})
+
+    async def gen():
+        it = stream_run(g, payload, _cfg(thread_id)).__aiter__()
+        try:
+            while True:
+                try:
+                    part = await anext(it)
+                except StopAsyncIteration:
+                    break
+                if await request.is_disconnected():
+                    break
+                yield _sse(part)
+        finally:
+            await it.aclose()
+
+    return EventSourceResponse(gen(), ping=15)
+
+
+
 @app.get("/review/{thread_id}")
-def review_status(thread_id: str):
-    st = graph.get_state(_cfg(thread_id))
+async def review_status(thread_id: str):
+    """刷新页面先看这里：不碰模型，只读检查点。"""
+    st = await _g().aget_state(_cfg(thread_id))
     pend = bool(st.tasks and any(t.interrupts for t in st.tasks))
     return {"thread_id": thread_id,
             "pending": pend,
             "next_nodes": list(st.next or ()),
             "review": st.tasks[0].interrupts[0].value if pend else None,
             "report": st.values.get("report") or ""}
+
+
+@app.get("/chat/stream")
+async def chat_stream(request: Request, message: str, thread_id: str | None = None):
+    """流式接口。两个非功能点都是实测逼出来的：
+
+    1) ping=15：judge + agent 之间有几秒一个事件都不发，没有心跳的 SSE 经不起任何一层
+       代理/反代会被掐断（本项目历史上真在长连接上踩过同样的坑）。EventSourceResponse 原生支持。
+    2) 每条事件之间查一次 request.is_disconnected()：用户关页面时如果继续消费图事件流，
+       图会一路跑到完，5-6 次 LLM 调用全烧掉。break 之后必须 aclose()，
+       否则底层那个 async generator 还挂在事件循环里。
+    """
+    message = _check_message(message)
+    tid = thread_id or uuid.uuid4().hex[:12]
+    g = _g()
+
+    async def gen():
+        it = stream_run(g, {"messages": [("user", message)]}, _cfg(tid)).__aiter__()
+        try:
+            while True:
+                try:
+                    part = await anext(it)
+                except StopAsyncIteration:
+                    break
+                if await request.is_disconnected():
+                    break          # 客户端已走，再 yield 没人收；停止消费就是停止跑图
+                yield _sse(part)
+        finally:
+            await it.aclose()
+
+    return EventSourceResponse(gen(), ping=15)
+
+# 静态页面必须挂在所有路由之后：mount("/") 是最宽的模式，写在 @app.xxx 之前
+# 会把 /chat/stream、/review 全部吞掉 —— 和 /review/{thread_id} 抢走 /review/stream
+# 是同一条规矩：宽的模式写后面。
+# 用绝对路径，这样不管从哪个目录起服务都能找到 web/。
+app.mount("/", StaticFiles(directory=str(Path(__file__).resolve().parent.parent / "web"),
+                           html=True), name="web")
