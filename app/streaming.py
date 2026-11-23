@@ -16,18 +16,6 @@ NODE_LABELS = {
 
 
 async def stream_run(graph, payload, config) -> AsyncIterator[dict[str, Any]]:
-    """把 LangGraph 的 v2 事件流翻译成前端事件。不碰模型、不碰检查点、不碰 HTTP。
-
-    两条实测出来的过滤条件是这段代码的全部难点：
-    1) token 只认 node=="agent"。一次请求 on_chat_model_stream 共 663 段，agent 只占 277，
-       其余来自 judge(197)/compare(148)/orchestrator(41)；后两者是结构化输出，
-       不过滤前端就会先飘出半截 JSON。
-    2) 进度只认 name==node。节点内部的多层 chain（RunnableSequence、_check_refusal、
-       子图 LangGraph，甚至条件路由函数 route_by_plan / route_after_agent）都会发
-       on_chain_start 且 langgraph_node 相同 —— 实测一次请求 11 条进度里只有 6 条是真的。
-       这里不能用「见过就跳过」的集合去重：reject 回环时 agent 会真的跑第二遍，
-       那种去重会把「正在重写」这条进度吞掉。
-    """
     tid = config["configurable"]["thread_id"]
     yield {"event": "run.started", "data": {"thread_id": tid}}
     try:
