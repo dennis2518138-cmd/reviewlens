@@ -1,5 +1,7 @@
 import json
 
+from functools import lru_cache
+
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_core.messages import SystemMessage
@@ -17,7 +19,14 @@ from app.workers import attach, compare, rating_subgraph, topic_subgraph
 TOP_K = 3
 MAX_TOOL_ROUNDS = 2
 TOOLS = [clean_data, sentiment_stats, keyword_extract]
-LLM_WITH_TOOLS = get_llm().bind_tools(TOOLS)
+
+
+@lru_cache(maxsize=1)
+def llm_with_tools():
+    # 懒加载：原来这行写在模块级，导致 import app.main 就要求 .env 已配好，
+    # 没配时报的是 pydantic 的 "Input should be a valid string / None"，
+    # 容器里第一次跑特别容易被误判成镜像构建坏了。挪进函数 = import 不再碰网络配置。
+    return get_llm().bind_tools(TOOLS)
 
 
 
@@ -64,7 +73,7 @@ def call_model(state: AnalysisState):
                 + brief + "\n")
     sys += "检索到的相关评论：\n" + ctx
     msgs = [SystemMessage(content=sys), *state["messages"]]
-    reply = LLM_WITH_TOOLS.invoke(msgs)
+    reply = llm_with_tools().invoke(msgs)
     out = {"messages": [reply]}
     if getattr(reply, "tool_calls", None):
         out["tool_rounds"] = rounds + 1

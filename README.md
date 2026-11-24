@@ -108,6 +108,44 @@ curl -N "http://127.0.0.1:8000/review/stream?thread_id=<上一步的单号>&deci
 | 请求 LLM 报 `ConnectionError` | 十有八九是 shell 里残留了 `HTTP_PROXY=127.0.0.1:7897` 而代理客户端没开。cmd 里 `set HTTP_PROXY=` 清掉再试；`set HTTPS_PROXY` 看有没有值就是这一步 |
 | `model.onnx` 应为 **94,851,877 字节** | 小于这个数就是下载中断，删掉重下 |
 
+## Docker 部署（D8）
+
+一条命令起同一个服务，端口 **8800**（避开本机手起的 8000/8799）：
+
+```cmd
+:: 前置仍是「快速开始」的 1)~3)：clone 代码、手建 .env、下载 models/ 权重
+::（权重既不进 git 也不进镜像，compose 是挂载进去的，所以这三步省不掉）
+docker compose up -d --build
+
+:: 构建上下文：87.75kB（仓库根目录实测 464 MB，.venv 一个目录占 364 MB）
+:: 镜像 925 MB：代码三层合计只有 172 KB，剩下全是 112 个依赖
+:: 容器状态（HEALTHCHECK 是真通过了一次，不是只写在 Dockerfile 里）：
+::   reviewlens-web-1   Up 16 seconds (healthy)   0.0.0.0:8800->8000/tcp
+```
+
+打开 **http://127.0.0.1:8800/** 就是同一个前端，返回的字节流与磁盘上的 `web/index.html`
+**sha256 逐字节相同**（`76430c53…`）。跑的是同一份代码，协议、事件、审批语义和上面完全一致。
+
+三个决定，以及各自的实测依据：
+
+| 决定 | 依据 |
+|---|---|
+| 基础镜像用 `python:3.12.6-slim-bookworm`，**不用 alpine** | 本机实测 alpine 72 MB / slim 189 MB，但 alpine 是 **musl**（`/lib/ld-musl-x86_64.so.1`，`platform.libc_ver()` 返回空），而 `onnxruntime`/`chromadb` 只发布 glibc 编译的 `.so`。为省 117 MB 换来依赖装不上，不划算 |
+| slim 里必须 `apt-get install libgomp1` | 不装则 `import onnxruntime` 当场 `libgomp.so.1: cannot open shared object file`；容器内实测 `ORT 1.31.1` 通过 |
+| 权重 91 MB 与 `data/` 走挂载、`.env` 走 `env_file` | 镜像内扫描 `/app` 只有 `app data requirements.txt scripts web`，**没有 `.env` / `.venv` / `models` / `.git`**（密钥进层等于 `docker history` 可翻） |
+
+挂载方向也实测过——这条是"Docker 会不会把数据关在容器里"的判据：
+
+```cmd
+:: 容器内读宿主的卷：集合 reviews count = 186（与本机 build_index 结果一致）
+:: 检查点：548 行 / 39 个会话单号，全是 D6~D7 期间产生的
+:: 跑完一次真提问后 docker compose restart：同一个单号仍查得到，report 384 字
+:: 宿主 data/checkpoints.db：5,488,640 → 5,779,456 字节   ← 容器写的就是宿主文件
+:: models 挂成 :ro，容器内 touch 报 Read-only file system
+```
+
+⚠️ 两件**没做**的事，别当成已交付：**不推任何 registry**（这镜像离开外部 LLM key 就跑不起来，推上去没意义）；**仍然没有鉴权**——`/review` 与 `GET /review/{单号}` 无登录、`thread_id` 就是能力凭证，而 `docker ps` 实测这个端口监听在 **`0.0.0.0`**，也就是局域网里别人能访问。只给自己用就把它改成 `127.0.0.1:8800:8000`；要对外演示必须先加登录或一次性 token。
+
 ## 进度
 
 - [x] D1 环境验证 + 仓库骨架 + 210 条评论数据（含金标注）
@@ -117,7 +155,7 @@ curl -N "http://127.0.0.1:8000/review/stream?thread_id=<上一步的单号>&deci
 - [x] D5 编排器（structured output + 枚举白名单）+ 评分/话题子图并行 + fan-in 对比；结论已回灌报告节点
 - [x] D6 SQLite 检查点 + HITL 审批中断（跨进程恢复实测；`/review` 单号协议）
 - [x] D7 SSE 流式（v2 协议 + 双层事件过滤 + 心跳 + 断连取消）+ 单页前端（真浏览器端到端实测）
-- [ ] D8 Docker 部署
+- [x] D8 Docker 部署（Dockerfile + .dockerignore + compose；上下文 464MB→87.75kB，镜像 925MB，healthy 实测，SSE 过 NAT 未缓冲，重启后单号仍可查）
 - [ ] D9 评估 + 演示视频 + README 定稿
 
 <!-- 素材区：D9 整理技术难点时从这里搬，勿删 -->
@@ -366,4 +404,39 @@ curl -N "http://127.0.0.1:8000/review/stream?thread_id=<上一步的单号>&deci
   纯移动代码必须拆成"删+插"两步、各带断言；② 删 `draft` 元素时漏了一行 `els.draft.scrollTop`，
   导致 `renderReview` 抛错、`done()` 里的 `es.close()` 永不执行 ⇒ **流不关 + 浏览器自动重连 = 反复重跑分析**。
   **一个 UI 小改动能引发成本事故**，这就是前端也要端到端测的理由
+
+2026-11-24 D8 Docker（新增 Dockerfile / .dockerignore / docker-compose.yml）
+- 构建上下文 **464 MB → 87.75 kB**：大头是 .venv 364 MB（Windows 的 .pyd/.dll，传进 Linux
+  镜像纯属污染），其次 models 91 MB、data 里 chroma 2.2 MB + checkpoints 6.1 MB
+- 镜像 925 MB：代码三层只有 81.9kB + 61.4kB + 28.7kB = 172 KB，其余全是 112 个依赖
+  ⇒ 想再瘦只能动 requirements，动 Docker 写法已经没有空间
+- 基础镜像选型是实测出来的不是抄来的：alpine 72 MB（**musl**：/lib/ld-musl-x86_64.so.1，
+  platform.libc_ver() 返回 ('','')）vs slim-bookworm 189 MB（glibc 2.36）。onnxruntime/chromadb
+  只发 glibc wheel（SO q76341201、crewAI#2324 两例）⇒ 选 slim，为省 117 MB 换装不上依赖不划算
+- slim 缺 libgomp1 ⇒ `import onnxruntime` 报 libgomp.so.1: cannot open shared object；补一层
+  `apt-get install -y --no-install-recommends libgomp1`，容器内实测 ORT 1.31.1 + chromadb 1.5.9
+- **不做多阶段构建**（有意取舍，已写进 Dockerfile 注释）：本项目没有编译产物，slim 已是最小运行层，
+  多阶段只会让 pip 缓存与 --chown 各多复制一层
+- BuildKit 警告逼出一个反模式修正：`FROM --platform=linux/amd64` 把平台写死 ⇒
+  `FromPlatformFlagConstDisallowed`（钉死常量会让 ARM 机器无法构建）。改成构建时传 `--platform`，
+  重建后警告 0 条。非 root 用 uid 1001 + `COPY --chown`，避开 `chown -R` 整层复制
+- 容器化当场暴露两个代码问题（都属"只有换环境才会现形"那一类，均已修）：
+  ① `app/graph.py:20` 模块级 `LLM_WITH_TOOLS = get_llm().bind_tools(TOOLS)` ⇒ **import app.main
+     就要求 .env 已配好**，没配时报的是 pydantic「Input should be a valid string / None」，
+     在容器里极易被误判成"镜像构建坏了"。改成 `@lru_cache` 的 `llm_with_tools()` 懒加载（调用点 1 处）
+  ② `.env` 里 `SQLITE_PATH=./data/reviewlens.db` 是**死键**（代码读的是 `CHECKPOINT_DB`，grep 命中 0）。
+     **只删不改名**——改名会让 config 去开一个空新库，D6 那 39 个跨进程恢复的单号当场全废
+- 端到端（真 LLM，宿主机 8800 → 容器 8000）：`content-type: text/event-stream`；事件到达时间
+  **分散** 1.34 / 1.38 / 2.41 / 3.49 / 3.49 / 5.33 s ⇒ **SSE 穿过 Docker 的 NAT 没被缓冲**
+  （这是 D8 唯一可能悄悄废掉 D7 成果的地方）；首字 3.96s，落在 D7 本机 3.3~4.4s 区间；
+  非法 JSON 0、『撰写报告』前 delta 0、进度节点无重复；审批闭环 published，report 384 字
+- D6 的能力搬进容器后仍在（持久化判据）：容器内读到 `reviews` count=186、检查点 548 行 / 39 单号；
+  `docker compose restart` 后同一单号 `7b50311b2da5` 仍查得到 report；宿主 `checkpoints.db`
+  5,488,640 → 5,779,456 字节（容器写的就是宿主文件）；`models` 挂 :ro，容器内 touch 报只读
+- ⚠️ 心跳 `ping=15` **至今仍未实测触发**，D8 也没测到，报告里不许写成实测
+- ⚠️ compose 的 `"8800:8000"` 实测监听在 `0.0.0.0`（docker ps 可见），而 `/review` 无鉴权 ⇒
+  自用应写 `127.0.0.1:8800:8000`，对外演示前必须加登录或一次性 token；本轮**未推任何 registry**
+- 本轮我自己制造的方法问题（同类三次）：`cmd | sed` 之后再取 `$?` 或 `|| echo`，取到的是管道末端
+  的状态而不是 cmd 的——因此把"凭证扫描通过""Hub 拉取成功""无残留"判断错过三次；
+  判据改成先重定向到文件、再单独取退出码
 -->

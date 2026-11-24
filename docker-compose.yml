@@ -1,0 +1,29 @@
+# ReviewLens 一键起服务。Compose v2 已不需要顶层 version: 字段（写了反而会被警告过期），
+# 所以这里不写 —— 这是有意的，不是漏了。
+name: reviewlens
+
+services:
+  web:
+    build:
+      context: .
+      # 构建参数显式写在这里：国内默认阿里云，境外改这两行或注释掉即可，
+      # 不把源写死进 Dockerfile。
+      args:
+        PIP_INDEX_URL: https://mirrors.aliyun.com/pypi/simple
+        PIP_TRUSTED_HOST: mirrors.aliyun.com
+    image: reviewlens:d8
+    ports:
+      # 宿主机 8800 → 容器 8000。用 8800 是为了不和你本机 8799 上手起的那个 uvicorn 撞。
+      - "8800:8000"
+    # 密钥只在这里注入，不进镜像层（验收时扫过：容器内 /app 下没有 .env）
+    env_file: .env
+    volumes:
+      # 数据必须是可写卷：chroma 索引 2.2 MB + 检查点 checkpoints.db 5.0 MB 都是运行时产物，
+      # 尤其 AsyncSqliteSaver 每条超级步都要写盘，容器内只读会当场崩。
+      # 挂在这还有个作用：容器重建后「单号」还能查回来（等于把 D6 的跨进程恢复搬进 Docker）。
+      - ./data:/app/data
+      # 91 MB 的 ONNX 权重只读挂载：它不在 git 里，打进镜像会让别人 clone 完构建失败。
+      # 第一次建索引要读它，之后就不再依赖新写入。
+      - ./models:/app/models:ro
+    init: true          # PID 1 负责转发信号，docker stop 才不会等 10 秒被 SIGKILL
+    restart: unless-stopped
