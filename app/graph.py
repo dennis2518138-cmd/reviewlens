@@ -23,9 +23,6 @@ TOOLS = [clean_data, sentiment_stats, keyword_extract]
 
 @lru_cache(maxsize=1)
 def llm_with_tools():
-    # 懒加载：原来这行写在模块级，导致 import app.main 就要求 .env 已配好，
-    # 没配时报的是 pydantic 的 "Input should be a valid string / None"，
-    # 容器里第一次跑特别容易被误判成镜像构建坏了。挪进函数 = import 不再碰网络配置。
     return get_llm().bind_tools(TOOLS)
 
 

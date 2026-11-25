@@ -1,12 +1,3 @@
-"""D1 数据资产：生成 ReviewLens 用的模拟电商评论（带金标注 + 人为噪声）。
-
-产出（都在 data/ 下）：
-  reviews_raw.jsonl   原始数据，故意含脏（重复/空文本/纯表情/评分与文本矛盾/中英混/超短）
-  reviews_gold.jsonl  同一条数据的金标注（真实情感/维度/是否脏），用于日后评估清洗与情感分析
-  skus.json           商品目录（2 个品类 × 2-3 个品牌，供竞品对比子图使用）
-
-用法: python scripts/gen_reviews.py [总条数，默认200]
-"""
 from __future__ import annotations
 import json, os, random, re, sys, time
 from pathlib import Path
@@ -99,7 +90,6 @@ def gen(product: dict, n: int, chain, rnd: random.Random) -> list[dict]:
 
 
 def inject_noise(rows: list[dict], rnd: random.Random) -> list[dict]:
-    """人为加脏：清洗工具（D4）必须有真东西可洗。"""
     noisy = []
     n = len(rows)
     dup_idx = rnd.sample(range(n), max(1, n // 20))
@@ -121,8 +111,6 @@ def inject_noise(rows: list[dict], rnd: random.Random) -> list[dict]:
                                                         " 五颗星!!! 五星好评!!!"])
         rows[i]["is_dirty"] = True
     conflict_idx = rnd.sample(range(n), max(1, n // 25))
-    # 按文本情感指定“反向”评分档：保证注入后必然可检出。
-    # 旧写法 rating = 6 - rating 对 3 星无操作（3→3），会造出标了脏但零差异的样本。
     FLIP = {"pos": (1, 2), "neg": (4, 5), "neu": (1, 5)}
     for i in conflict_idx:
         rows[i] = dict(rows[i])

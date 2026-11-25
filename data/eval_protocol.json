@@ -1,0 +1,106 @@
+{
+  "suite": "D9-e3",
+  "base": "http://127.0.0.1:8800",
+  "passed": 14,
+  "total": 14,
+  "cases": [
+    {
+      "desc": "POST /chat message='' → 422",
+      "got": 422,
+      "expect": 422,
+      "extra": "content-type=application/json",
+      "ok": true
+    },
+    {
+      "desc": "POST /chat message='   ' → 422",
+      "got": 422,
+      "expect": 422,
+      "extra": "content-type=application/json",
+      "ok": true
+    },
+    {
+      "desc": "POST /chat message='物' → 422",
+      "got": 422,
+      "expect": 422,
+      "extra": "content-type=application/json",
+      "ok": true
+    },
+    {
+      "desc": "GET /chat/stream message='' → 422",
+      "got": 422,
+      "expect": 422,
+      "extra": "content-type=application/json  ← 422 前于 SSE✅",
+      "ok": true
+    },
+    {
+      "desc": "GET /chat/stream message='   ' → 422",
+      "got": 422,
+      "expect": 422,
+      "extra": "content-type=application/json  ← 422 前于 SSE✅",
+      "ok": true
+    },
+    {
+      "desc": "GET /chat/stream message='物' → 422",
+      "got": 422,
+      "expect": 422,
+      "extra": "content-type=application/json  ← 422 前于 SSE✅",
+      "ok": true
+    },
+    {
+      "desc": "GET /review/stream decision=maybe → 422",
+      "got": 422,
+      "expect": 422,
+      "extra": "content-type=application/json（非法 decision 必须先于 SSE 拒绝）",
+      "ok": true
+    },
+    {
+      "desc": "POST /review decision=maybe → 422",
+      "got": 422,
+      "expect": 422,
+      "extra": "",
+      "ok": true
+    },
+    {
+      "desc": "GET /review/stream?thread_id=不存在&decision=approve → 409",
+      "got": 409,
+      "expect": 409,
+      "extra": "content-type=application/json",
+      "ok": true
+    },
+    {
+      "desc": "POST /review thread_id=不存在 → 409",
+      "got": 409,
+      "expect": 409,
+      "extra": "",
+      "ok": true
+    },
+    {
+      "desc": "GET /review/stream（缺 query）不被 {thread_id} 抢 → 非200",
+      "got": 422,
+      "expect": 422,
+      "extra": "content-type=application/json",
+      "ok": true
+    },
+    {
+      "desc": "GET /review/{id} → 200 且含 pending",
+      "got": 200,
+      "expect": 200,
+      "extra": "pending=False",
+      "ok": true
+    },
+    {
+      "desc": "GET /health → 200",
+      "got": 200,
+      "expect": 200,
+      "extra": "",
+      "ok": true
+    },
+    {
+      "desc": "GET / → 200",
+      "got": 200,
+      "expect": 200,
+      "extra": "content-type=text/html; charset=utf-8",
+      "ok": true
+    }
+  ]
+}

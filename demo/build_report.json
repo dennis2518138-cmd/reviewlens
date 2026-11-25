@@ -1,0 +1,81 @@
+{
+  "output": "C:\\Users\\Lenovo\\Downloads\\reviewlens_demo.mp4",
+  "duration": 25.64,
+  "clips": [
+    {
+      "i": 1,
+      "text": "评论分析，也能停下来审。",
+      "file": "D:\\projects\\reviewlens\\demo\\vo\\line01_32.mp3",
+      "dur": 2.304,
+      "rate": 32,
+      "start": 0.05,
+      "window": 2.164,
+      "fits": false
+    },
+    {
+      "i": 2,
+      "text": "问：物流在抱怨什么？",
+      "file": "D:\\projects\\reviewlens\\demo\\vo\\line02_14.mp3",
+      "dur": 2.304,
+      "rate": 14,
+      "start": 2.334,
+      "window": 2.38,
+      "fits": true
+    },
+    {
+      "i": 3,
+      "text": "检索真实评论、拆任务、算统计、跨口径对比。",
+      "file": "D:\\projects\\reviewlens\\demo\\vo\\line03_20.mp3",
+      "dur": 4.248,
+      "rate": 20,
+      "start": 4.834,
+      "window": 4.302,
+      "fits": true
+    },
+    {
+      "i": 4,
+      "text": "报告写完不直接发布——停下来，等人审批。",
+      "file": "D:\\projects\\reviewlens\\demo\\vo\\line04_8.mp3",
+      "dur": 4.008,
+      "rate": 8,
+      "start": 9.256,
+      "window": 4.824,
+      "fits": true
+    },
+    {
+      "i": 5,
+      "text": "不认可就拒绝，它当场重写。",
+      "file": "D:\\projects\\reviewlens\\demo\\vo\\line05_26.mp3",
+      "dur": 2.496,
+      "rate": 26,
+      "start": 14.2,
+      "window": 2.586,
+      "fits": true
+    },
+    {
+      "i": 6,
+      "text": "重写会说清结论依据哪几条评论。",
+      "file": "D:\\projects\\reviewlens\\demo\\vo\\line06_14.mp3",
+      "dur": 3.144,
+      "rate": 14,
+      "start": 16.906,
+      "window": 3.302,
+      "fits": true
+    },
+    {
+      "i": 7,
+      "text": "通过才发布，单号和字数全部留痕。",
+      "file": "D:\\projects\\reviewlens\\demo\\vo\\line07_8.mp3",
+      "dur": 3.648,
+      "rate": 8,
+      "start": 20.328,
+      "window": 4.192,
+      "fits": true
+    }
+  ],
+  "cut": [
+    14.2,
+    15.8
+  ],
+  "offset": 1.666
+}

@@ -1,0 +1,12 @@
+{"query": "早上说的第三天到，我等到第四天", "expect_dim": "物流", "style": "口语长句"}
+{"query": "问了三遍没人搭理我", "expect_dim": "客服", "style": "口语"}
+{"query": "听半集剧就得插线", "expect_dim": "续航", "style": "间接描述"}
+{"query": "vocal 听着像蒙了层布", "expect_dim": "音质", "style": "中英混杂"}
+{"query": "地铁里邻座打电话我一个字不落全听见", "expect_dim": "降噪", "style": "场景描述"}
+{"query": "接缝刮手，边上还有毛刺", "expect_dim": "外观做工", "style": "细节描述"}
+{"query": "连上两分钟自己就断了", "expect_dim": "连接稳定性", "style": "口语"}
+{"query": "早上刷完舌头舔一圈特别滑", "expect_dim": "清洁力", "style": "间接描述"}
+{"query": "这价买回来到底亏不亏", "expect_dim": "价格性价比", "style": "口语"}
+{"query": "跟小风扇在耳朵边上嗡嗡一样", "expect_dim": "噪声", "style": "比喻"}
+{"query": "午休趴着睡一会就难受", "expect_dim": "佩戴舒适度", "style": "体感"}
+{"query": "取件要跑两趟驿站，还要报手机尾号", "expect_dim": "物流", "style": "具体流程"}

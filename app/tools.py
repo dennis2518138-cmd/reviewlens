@@ -79,13 +79,11 @@ def clean_data(product_ids: list[str] | None = None, sample_limit: int = 8) -> d
 
 
 def _band(rating) -> str:
-    """评分 → 口碑三档。int() 挡住真实数据里常见的 "4" / "4.0" 字符串评分。"""
     r = int(rating)
     return "pos" if r >= 4 else ("neu" if r == 3 else "neg")
 
 
 def _wanted(product_ids: list[str] | None) -> list[str]:
-    """把模型传来的商品 ID 清干净：跳过 None 和空串，去掉首尾空格。"""
     return [p.strip() for p in (product_ids or []) if p and p.strip()]
 
 
@@ -183,7 +181,6 @@ def keyword_extract(product_ids: list[str] | None = None,
             hits = [r for r in rs if any(w in (r.get("text") or "") for w in words)]
             if not hits:
                 continue
-            # 例句优先给评分最低的（差评信息量最大），并避开其他话题已经用过的同一条评论
             ranked = sorted(hits, key=lambda r: (int(r["rating"]), r["review_id"]))
             picked = [r for r in ranked if r["review_id"] not in used][:example_limit]
             if not picked:

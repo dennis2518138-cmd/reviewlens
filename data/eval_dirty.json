@@ -1,0 +1,23 @@
+{
+  "suite": "D9-e2",
+  "total": 210,
+  "dirty_total": 28,
+  "format_class": {
+    "n": 14,
+    "caught": 14,
+    "recall": 1.0,
+    "false_kill_clean": 0
+  },
+  "dup_class": {
+    "text_groups": 11,
+    "group_size_after_kept": {
+      "1": 10,
+      "0": 1
+    }
+  },
+  "semantic_class": {
+    "n": 4,
+    "rule_caught": 0,
+    "note": "规则不负责，单独报，不并入格式召回"
+  }
+}

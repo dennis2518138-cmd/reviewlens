@@ -27,16 +27,22 @@ def junk_reason(text: str) -> str | None:
 
 
 def dedupe(rows: list[dict]) -> tuple[list[dict], list[dict]]:
-    seen: set[str] = set()
-    kept: list[dict] = []
-    dropped: list[dict] = []
+    """按文本去重。同一文本保留哪条不能靠文件顺序，否则 `-dup` 副本排在
+    原件前面时，留下的就是副本、删掉的是干净原件（虽然文本一致不影响检索，
+    但稳定 review_id 应当指向原件）。规则：优先保留非 `-dup` 的原件；
+    都非 dup 或都 dup 时，保留首次出现的那条。"""
+    chosen: dict[str, dict] = {}
+    order: list[str] = []
     for r in rows:
         t = clean_text(r)
-        if t in seen:
-            dropped.append(r)
-            continue
-        seen.add(t)
-        kept.append(r)
+        if t not in chosen:
+            chosen[t] = r
+            order.append(t)
+        elif chosen[t].get("review_id", "").endswith("-dup") and not r.get("review_id", "").endswith("-dup"):
+            chosen[t] = r  # 已选是副本，来的是原件 -> 换成原件
+    kept = [chosen[t] for t in order]
+    kept_ids = {id(r) for r in kept}
+    dropped = [r for r in rows if id(r) not in kept_ids]
     return kept, dropped
 
 

@@ -147,7 +147,6 @@ async def review_stream(request: Request, thread_id: str, decision: str, note: s
 
 @app.get("/review/{thread_id}")
 async def review_status(thread_id: str):
-    """刷新页面先看这里：不碰模型，只读检查点。"""
     st = await _g().aget_state(_cfg(thread_id))
     pend = bool(st.tasks and any(t.interrupts for t in st.tasks))
     return {"thread_id": thread_id,
@@ -159,14 +158,6 @@ async def review_status(thread_id: str):
 
 @app.get("/chat/stream")
 async def chat_stream(request: Request, message: str, thread_id: str | None = None):
-    """流式接口。两个非功能点都是实测逼出来的：
-
-    1) ping=15：judge + agent 之间有几秒一个事件都不发，没有心跳的 SSE 经不起任何一层
-       代理/反代会被掐断（本项目历史上真在长连接上踩过同样的坑）。EventSourceResponse 原生支持。
-    2) 每条事件之间查一次 request.is_disconnected()：用户关页面时如果继续消费图事件流，
-       图会一路跑到完，5-6 次 LLM 调用全烧掉。break 之后必须 aclose()，
-       否则底层那个 async generator 还挂在事件循环里。
-    """
     message = _check_message(message)
     tid = thread_id or uuid.uuid4().hex[:12]
     g = _g()
@@ -187,9 +178,6 @@ async def chat_stream(request: Request, message: str, thread_id: str | None = No
 
     return EventSourceResponse(gen(), ping=15)
 
-# 静态页面必须挂在所有路由之后：mount("/") 是最宽的模式，写在 @app.xxx 之前
-# 会把 /chat/stream、/review 全部吞掉 —— 和 /review/{thread_id} 抢走 /review/stream
-# 是同一条规矩：宽的模式写后面。
-# 用绝对路径，这样不管从哪个目录起服务都能找到 web/。
+
 app.mount("/", StaticFiles(directory=str(Path(__file__).resolve().parent.parent / "web"),
                            html=True), name="web")

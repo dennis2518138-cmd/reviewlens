@@ -1,0 +1,144 @@
+{
+  "suite": "D9-e4",
+  "base": "http://127.0.0.1:8800",
+  "question": "物流方面用户在抱怨什么？",
+  "n": 5,
+  "runs": [
+    {
+      "run": 1,
+      "thread_id": "0f246c9070f6",
+      "round": 1,
+      "retrieve": 1.377,
+      "orchestrator": 2.778,
+      "agent": 5.066,
+      "first_delta": 5.416,
+      "draft": 6.715,
+      "draft_chars": 400,
+      "deltas": 242,
+      "approve": 1.504,
+      "total": 8.219,
+      "status": "published",
+      "report_chars": 400,
+      "timeline": {
+        "retrieve": 1.377,
+        "orchestrator": 2.778,
+        "topic_analysis": 3.704,
+        "compare": 5.065,
+        "agent": 5.066,
+        "human_review": 6.694
+      }
+    },
+    {
+      "run": 2,
+      "thread_id": "c4f13dd96977",
+      "round": 1,
+      "retrieve": 1.438,
+      "orchestrator": 1.462,
+      "agent": 3.885,
+      "first_delta": 4.668,
+      "draft": 6.352,
+      "draft_chars": 415,
+      "deltas": 264,
+      "approve": 1.323,
+      "total": 7.675,
+      "status": "published",
+      "report_chars": 415,
+      "timeline": {
+        "retrieve": 1.438,
+        "orchestrator": 1.462,
+        "topic_analysis": 2.287,
+        "compare": 3.882,
+        "agent": 3.885,
+        "human_review": 6.335
+      }
+    },
+    {
+      "run": 3,
+      "thread_id": "9e85a45ba7b5",
+      "round": 1,
+      "retrieve": 1.431,
+      "orchestrator": 1.46,
+      "agent": 3.479,
+      "first_delta": 4.181,
+      "draft": 5.426,
+      "draft_chars": 344,
+      "deltas": 223,
+      "approve": 1.518,
+      "total": 6.945,
+      "status": "published",
+      "report_chars": 344,
+      "timeline": {
+        "retrieve": 1.431,
+        "orchestrator": 1.46,
+        "topic_analysis": 2.406,
+        "compare": 3.478,
+        "agent": 3.479,
+        "human_review": 5.408
+      }
+    },
+    {
+      "run": 4,
+      "thread_id": "ca819bcf4ddf",
+      "round": 1,
+      "retrieve": 1.514,
+      "orchestrator": 1.541,
+      "agent": 3.713,
+      "first_delta": 4.067,
+      "draft": 6.078,
+      "draft_chars": 580,
+      "deltas": 354,
+      "approve": 1.392,
+      "total": 7.471,
+      "status": "published",
+      "report_chars": 580,
+      "timeline": {
+        "retrieve": 1.514,
+        "orchestrator": 1.541,
+        "topic_analysis": 2.6,
+        "compare": 3.711,
+        "agent": 3.713,
+        "human_review": 6.06
+      }
+    },
+    {
+      "run": 5,
+      "thread_id": "cd2bd60d4557",
+      "round": 1,
+      "retrieve": 1.299,
+      "orchestrator": 1.329,
+      "agent": 3.652,
+      "first_delta": 4.358,
+      "draft": 5.713,
+      "draft_chars": 338,
+      "deltas": 211,
+      "approve": 1.422,
+      "total": 7.135,
+      "status": "published",
+      "report_chars": 338,
+      "timeline": {
+        "retrieve": 1.299,
+        "orchestrator": 1.329,
+        "topic_analysis": 2.353,
+        "compare": 3.65,
+        "agent": 3.652,
+        "human_review": 5.695
+      }
+    }
+  ],
+  "median": {
+    "retrieve": 1.431,
+    "orchestrator": 1.462,
+    "agent": 3.713,
+    "first_delta": 4.358,
+    "draft": 6.078,
+    "approve": 1.422,
+    "total": 7.471,
+    "draft_chars": 400,
+    "deltas": 242
+  },
+  "cold_start": {
+    "first_retrieve": 1.377,
+    "rest_median_retrieve": 1.434
+  },
+  "caveat": "同负载 5 次，DeepSeek 侧可能存在 prompt cache，区间下限偏乐观，不能写成恒定值"
+}

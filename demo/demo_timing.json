@@ -1,0 +1,70 @@
+{
+  "total": 28.906,
+  "phases": [
+    {
+      "phase": "navigate",
+      "t": 1.297
+    },
+    {
+      "phase": "page_ready",
+      "t": 1.609
+    },
+    {
+      "phase": "hover_input",
+      "t": 3.219
+    },
+    {
+      "phase": "type_question",
+      "t": 4.0
+    },
+    {
+      "phase": "hover_send",
+      "t": 5.813
+    },
+    {
+      "phase": "click_send",
+      "t": 6.5
+    },
+    {
+      "phase": "review_panel_visible",
+      "t": 10.922
+    },
+    {
+      "phase": "hover_note",
+      "t": 13.531
+    },
+    {
+      "phase": "type_note",
+      "t": 14.172
+    },
+    {
+      "phase": "hover_reject",
+      "t": 15.594
+    },
+    {
+      "phase": "click_reject",
+      "t": 16.313
+    },
+    {
+      "phase": "round2_rewritten",
+      "t": 20.172
+    },
+    {
+      "phase": "hover_approve",
+      "t": 22.797
+    },
+    {
+      "phase": "click_approve",
+      "t": 23.594
+    },
+    {
+      "phase": "published",
+      "t": 23.688
+    },
+    {
+      "phase": "end",
+      "t": 27.906
+    }
+  ],
+  "video": "D:\\projects\\reviewlens\\demo\\raw\\page@68b89de370e61e52f1b51eae286d9e61.webm"
+}

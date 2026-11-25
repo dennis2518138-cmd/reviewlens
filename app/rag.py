@@ -39,7 +39,6 @@ def get_collection(reset: bool = False):
 
 
 def index_reviews(rows: list[dict], reset: bool = False) -> dict:
-    """入库前的质量门与工具共用同一条清洗流水线（app/rules.py），口径不可能分叉。"""
     col = get_collection(reset=reset)
     kept, dropped = clean_rows(rows)
 

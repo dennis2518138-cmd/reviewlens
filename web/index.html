@@ -118,8 +118,6 @@ const els = {
   ok: $("ok"), no: $("no"), round: $("round"),
 };
 
-// 前端只自己记两样：这条流的连接对象、这单的单号。
-// 「要不要审批」「发布没发布」一律由后端事件决定，前端不猜。
 let es = null;
 let tid = null;
 
@@ -135,7 +133,6 @@ function banner(cls, text) {
   els.banner.textContent = text || "";
 }
 
-// 进度条：一条节点一行。新节点进来时，上一行落定为 done。
 function step(label) {
   const prev = els.steps.querySelector("li.now");
   if (prev) { prev.classList.remove("now"); prev.classList.add("done"); }
@@ -154,12 +151,9 @@ function toolNote(name) {
   now.append(s);
 }
 
-// 打字机：先攒进 raw，再用 requestAnimationFrame 每帧渲染一次。
-// 为什么不每段直接 innerHTML：907 字要重排 573 次；一帧一次就够，肉眼看不出差别。
 let raw = "";
 let raf = 0;
 
-// 只做「转义 + 加标签」，标签全部由我们自己拼，所以模型输出里的 <script> 只会显示成文字。
 function esc(s) {
   return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 }
@@ -170,11 +164,9 @@ function inline(s) {
     .replace(/(^|[^*])\*([^*]+)\*(?![*])/g, "$1<em>$2</em>");
 }
 
-// 模型输出的是 Markdown。不渲染的话 ## ** |---| 会原样出现在页面上（截图实测到）。
-// 这里只处理四种：# 标题、**粗体**、- 列表、| 表格（分隔行 |---| 丢掉，其余按单元格排）。
 function mdLite(text) {
   const out = [];
-  let tableRun = 0;      // 连续表格行的序号：第一行当表头渲染
+  let tableRun = 0;
   for (const line of text.split("\n")) {
     if (/^\s*\|[\s:|-]+\|\s*$/.test(line)) continue;          // |---|---|
     if (/^\s*\|.*\|\s*$/.test(line)) {
@@ -186,7 +178,7 @@ function mdLite(text) {
       out.push('<div class="trow">' + row + "</div>");
       continue;
     } else if (tableRun) {
-      tableRun = 0;      // 表格结束
+      tableRun = 0;
     }
     const h = line.match(/^\s*(#{1,4})\s*(.*)$/);
     if (h) { out.push('<p class="ln"><strong>' + inline(h[2]) + "</strong></p>"); continue; }
@@ -216,7 +208,6 @@ function answerSet(text) {
 
 function renderReview(d) {
   els.asked.textContent = d.asked || "";
-  // 草稿正文已经在上面「内容」区逐字打出来了，这里再放一份就是 907 字重复两遍。
   els.draftRef.textContent = "共 " + (d.draft || "").length +
     " 字，已在上方「内容」区逐字显示，可直接滚动核对。";
   els.best.textContent = d.best || "（无）";
@@ -226,8 +217,7 @@ function renderReview(d) {
 }
 
 function settleSteps(finalLabel, cls) {
-  // 终态时把还在"进行中"的行落定，再补一行结果。
-  // 不这么做的话：横幅写着「已发布」，进度条最后一行还高亮着「等待人工审批」——自相矛盾。
+
   els.steps.querySelectorAll("li.now").forEach((li) => {
     li.classList.remove("now"); li.classList.add("done");
   });
@@ -240,7 +230,6 @@ function settleSteps(finalLabel, cls) {
 
 function renderDone(d) {
   if (d.status === "published") {
-    // report 在 not_published 时是 null，所以判据必须是 status，不能判 report 长度。
     answerSet(d.report || "");
     banner("pub", "已发布 · 单号 " + (d.thread_id || tid || "") +
       " · " + (d.report ? d.report.length : 0) + " 字");
@@ -264,17 +253,16 @@ function failNet() {
 }
 
 function openStream(url) {
-  if (es) { es.close(); es = null; }          // 上一条没关会一直挂着，而且浏览器会自动重连
+  if (es) { es.close(); es = null; }
   setBusy(true);
   banner("");
   els.steps.textContent = "";
-  answerSet("");                               // 拒绝重写前必须清空，否则新旧叠成一坨
+  answerSet("");
   els.review.hidden = true;
   els.tid.textContent = tid ? "单号 " + tid : "分配中…";
 
   es = new EventSource(url);
-  // done(...) 包一层：终局事件处理完立刻 close。EventSource 断线会自动重连，
-  // 服务端每接一条就是一次完整跑图（5-6 次模型调用），绝不能留着。
+
   const done = (fn) => (e) => {
     let d = {};
     try { d = JSON.parse(e.data); } catch (err) { /* 坏数据只丢这一段，不断整条流 */ }
@@ -300,7 +288,7 @@ function openStream(url) {
 els.send.onclick = () => {
   const msg = els.q.value.trim();
   if (msg.length < 2) { banner("err", "问题至少写两个字，例如「物流」。"); return; }
-  tid = null;                        // 新单号由服务端发，别拿上一单的去提问
+  tid = null;
   openStream("/chat/stream?message=" + encodeURIComponent(msg));
 };
 
@@ -308,7 +296,7 @@ els.q.addEventListener("keydown", (e) => { if (e.key === "Enter") els.send.click
 
 els.ok.onclick = () => {
   if (!tid) { banner("err", "没有单号，无法审批。"); return; }
-  els.note.value = "";               // 通过不需要意见，清空免得留下误导性的残留
+  els.note.value = "";
   openStream("/review/stream?thread_id=" + encodeURIComponent(tid) + "&decision=approve");
 };
 
