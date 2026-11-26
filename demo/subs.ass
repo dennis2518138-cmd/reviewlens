@@ -6,14 +6,14 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Main,Microsoft YaHei,46,&H00FFFFFF,&H00FFFFFF,&H00101010,&H99000000,0,0,0,0,100,100,0,0,3,2,0,2,90,90,54,1
+Style: Main,Microsoft YaHei,44,&H00FFFFFF,&H00FFFFFF,&H00141414,&H00141414,0,0,0,0,100,100,0.6,0,1,3.2,0.9,2,90,90,72,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,0:00:00.05,0:00:02.70,Main,,0,0,0,,评论分析，也能停下来审。
-Dialogue: 0,0:00:02.33,0:00:04.99,Main,,0,0,0,,问：物流在抱怨什么？
-Dialogue: 0,0:00:04.83,0:00:09.43,Main,,0,0,0,,检索真实评论、拆任务、算统计、跨口径对比。
-Dialogue: 0,0:00:09.26,0:00:13.61,Main,,0,0,0,,报告写完不直接发布——停下来，等人审批。
-Dialogue: 0,0:00:14.20,0:00:17.05,Main,,0,0,0,,不认可就拒绝，它当场重写。
-Dialogue: 0,0:00:16.91,0:00:20.40,Main,,0,0,0,,重写会说清结论依据哪几条评论。
-Dialogue: 0,0:00:20.33,0:00:24.33,Main,,0,0,0,,通过才发布，单号和字数全部留痕。
+Dialogue: 0,0:00:00.05,0:00:02.56,Main,,0,0,0,,评论分析，先审再发。
+Dialogue: 0,0:00:02.33,0:00:04.15,Main,,0,0,0,,先问一句。
+Dialogue: 0,0:00:04.83,0:00:09.48,Main,,0,0,0,,检索真实评论，拆任务、算统计、跨口径对比。
+Dialogue: 0,0:00:09.26,0:00:14.12,Main,,0,0,0,,报告写完了不直接发布，先停下来等人工审批。
+Dialogue: 0,0:00:14.20,0:00:17.07,Main,,0,0,0,,点拒绝，它重写一版。
+Dialogue: 0,0:00:16.91,0:00:20.26,Main,,0,0,0,,重写会标明依据哪几条评论。
+Dialogue: 0,0:00:20.33,0:00:24.04,Main,,0,0,0,,通过才发布，单号和字数都留痕。

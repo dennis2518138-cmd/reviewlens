@@ -19,7 +19,7 @@ RAW = DEMO / "raw"
 VO = DEMO / "vo"
 OUT_MP4 = Path("C:/Users/Lenovo/Downloads/reviewlens_demo.mp4")
 PY = "D:/python/python.exe"
-VOICE = "zh-CN-XiaoxiaoNeural"
+VOICE = "zh-CN-YunyangNeural"   # News / Professional —— 播音腔，社区里最"讲解感"的中文音色
 CUT_FROM, CUT_TO = 14.2, 15.8   # 视频时间轴上的空白窗
 
 
@@ -35,13 +35,13 @@ def dur(path: Path) -> float:
 
 # 旁白：文本 + 所属窗口的墙钟阶段区间（clock 秒）
 LINES = [
-    ("评论分析，也能停下来审。", "page_ready", "type_question"),
-    ("问：物流在抱怨什么？", "type_question", "click_send"),
-    ("检索真实评论、拆任务、算统计、跨口径对比。", "click_send", "review_panel_visible"),
-    ("报告写完不直接发布——停下来，等人审批。", "review_panel_visible", "click_reject"),
-    ("不认可就拒绝，它当场重写。", "click_reject", "round2_rewritten"),
-    ("重写会说清结论依据哪几条评论。", "round2_rewritten", "click_approve"),
-    ("通过才发布，单号和字数全部留痕。", "click_approve", "end"),
+    ("评论分析，先审再发。", "page_ready", "type_question"),
+    ("先问一句。", "type_question", "click_send"),
+    ("检索真实评论，拆任务、算统计、跨口径对比。", "click_send", "review_panel_visible"),
+    ("报告写完了不直接发布，先停下来等人工审批。", "review_panel_visible", "click_reject"),
+    ("点拒绝，它重写一版。", "click_reject", "round2_rewritten"),
+    ("重写会标明依据哪几条评论。", "round2_rewritten", "click_approve"),
+    ("通过才发布，单号和字数都留痕。", "click_approve", "end"),
 ]
 
 
@@ -74,7 +74,7 @@ def main() -> None:
         win_end = to_video(ph[b])
         window = max(0.8, win_end - win_start - 0.12)
         best = None
-        for rate in (8, 14, 20, 26, 32):
+        for rate in (0, 4, 8, 12, 16):
             out = VO / f"line{i:02d}_{rate}.mp3"
             r = sh([PY, "-m", "edge_tts", "--voice", VOICE, f"--rate=+{rate}%",
                     "--text", text, "--write-media", str(out)])
@@ -104,8 +104,9 @@ def main() -> None:
            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
            "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
            "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-           "Style: Main,Microsoft YaHei,46,&H00FFFFFF,&H00FFFFFF,&H00101010,&H99000000,"
-           "0,0,0,0,100,100,0,0,3,2,0,2,90,90,54,1",
+           # 描边式：无底板，白字 + 深色描边 + 轻微阴影（比灰底条干净，不压界面）
+           "Style: Main,Microsoft YaHei,44,&H00FFFFFF,&H00FFFFFF,&H00141414,&H00141414,"
+           "0,0,0,0,100,100,0.6,0,1,3.2,0.9,2,90,90,72,1",
            "", "[Events]",
            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"]
     for c in clips:
@@ -130,8 +131,10 @@ def main() -> None:
         ms = int(c["start"] * 1000)
         parts.append(f"[{n}:a]aresample=44100,adelay={ms}|{ms},volume=1.0[a{n}]")
         amix_in += f"[a{n}]"
+    # 旁白响度整形：先压峰值（语音制峰比高，直接拉大会削波），再抬 6dB，最后限幅到 -1.5 dBTP
     parts.append(f"{amix_in}amix=inputs={len(clips)+1}:normalize=0,"
-                 f"alimiter=limit=0.95,atrim=0:{vo_total}[aout]")
+                 f"acompressor=threshold=0.05:ratio=3:attack=8:release=180,"
+                 f"volume=10dB,alimiter=limit=0.80,atrim=0:{vo_total}[aout]")
     cmd = (["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(parts),
             "-map", "[vout]", "-map", "[aout]",
             "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
