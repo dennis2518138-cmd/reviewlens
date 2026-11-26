@@ -111,6 +111,14 @@
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
+// 鉴权：服务端设了 API_TOKEN 时，用 ?token=xxx 打开本页，流请求会自动带上。
+// （浏览器原生 EventSource 不能自定义请求头，只能走 query）
+const TOKEN = new URLSearchParams(location.search).get("token") || "";
+function withToken(url) {
+  if (!TOKEN) return url;
+  return url + (url.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(TOKEN);
+}
+
 const els = {
   tid: $("tid"), steps: $("steps"), answer: $("answer"), review: $("review"),
   asked: $("asked"), draftRef: $("draftRef"), best: $("best"), worst: $("worst"),
@@ -261,7 +269,7 @@ function openStream(url) {
   els.review.hidden = true;
   els.tid.textContent = tid ? "单号 " + tid : "分配中…";
 
-  es = new EventSource(url);
+  es = new EventSource(withToken(url));
 
   const done = (fn) => (e) => {
     let d = {};

@@ -1,9 +1,11 @@
 import json
+import os
+import secrets
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from langgraph.types import Command
 from pydantic import BaseModel
@@ -24,6 +26,14 @@ async def lifespan(app: FastAPI):
     global graph
     async with checkpoint_lifespan() as saver:
         graph = build_graph(saver)
+        # 预热检索链（ONNX + chroma + BM25 索引）：实测首请求 1.0~1.4s、warm 17~27ms，
+        # 这笔钱让启动时付，别让第一个用户付。失败不影响启动（降级为首次请求时再建）。
+        try:
+            from app.rag import warmup
+            info = warmup()
+            print(f"[warmup] {info}")
+        except Exception as e:  # noqa: BLE001
+            print(f"[warmup] 跳过：{type(e).__name__}: {e}")
         yield
     graph = None
 
@@ -84,12 +94,33 @@ def _outcome(result: dict, thread_id: str) -> dict:
     return {"status": "published", "thread_id": thread_id, "report": report}
 
 
+API_TOKEN = os.getenv("API_TOKEN", "").strip()
+
+
+async def _require_token(request: Request) -> None:
+    """API_TOKEN 为空 = 不鉴权（本地开发默认值）；一旦设了就必须带 token。
+
+    为什么同时接受 ?token=：浏览器原生 EventSource 无法自定义请求头，
+    SSE 只能走 query。REST 调用（/chat、/review）建议用 Authorization 头。
+    /health 与静态页不挡——健康检查要能裸探，页面本身不含数据。
+    """
+    if not API_TOKEN:
+        return
+    raw = request.headers.get("authorization", "")
+    tok = raw[7:].strip() if raw.lower().startswith("bearer ") else request.query_params.get("token", "")
+    if not secrets.compare_digest(tok, API_TOKEN):
+        raise HTTPException(
+            status_code=401,
+            detail="缺少或错误的 token：Authorization: Bearer <token> 或 ?token=<token>",
+        )
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
 
 
-@app.post("/chat")
+@app.post("/chat", dependencies=[Depends(_require_token)])
 async def chat(body: ChatIn):
     message = _check_message(body.message)
     tid = body.thread_id or uuid.uuid4().hex[:12]
@@ -100,7 +131,7 @@ async def chat(body: ChatIn):
     return _outcome(result, tid)
 
 
-@app.post("/review")
+@app.post("/review", dependencies=[Depends(_require_token)])
 async def review(body: ReviewIn):
     if body.decision not in ("approve", "reject"):
         raise HTTPException(status_code=422, detail="decision 只能是 approve 或 reject")
@@ -116,7 +147,7 @@ async def review(body: ReviewIn):
     return _outcome(result, body.thread_id)
 
 
-@app.get("/review/stream")
+@app.get("/review/stream", dependencies=[Depends(_require_token)])
 async def review_stream(request: Request, thread_id: str, decision: str, note: str = ""):
     if decision not in ("approve", "reject"):
         raise HTTPException(status_code=422, detail="decision 只能是 approve 或 reject")
@@ -145,7 +176,7 @@ async def review_stream(request: Request, thread_id: str, decision: str, note: s
 
 
 
-@app.get("/review/{thread_id}")
+@app.get("/review/{thread_id}", dependencies=[Depends(_require_token)])
 async def review_status(thread_id: str):
     st = await _g().aget_state(_cfg(thread_id))
     pend = bool(st.tasks and any(t.interrupts for t in st.tasks))
@@ -156,7 +187,7 @@ async def review_status(thread_id: str):
             "report": st.values.get("report") or ""}
 
 
-@app.get("/chat/stream")
+@app.get("/chat/stream", dependencies=[Depends(_require_token)])
 async def chat_stream(request: Request, message: str, thread_id: str | None = None):
     message = _check_message(message)
     tid = thread_id or uuid.uuid4().hex[:12]

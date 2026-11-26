@@ -255,6 +255,69 @@ D:/python/python.exe demo/build_video.py
 **一处有意的剪辑**：拒绝 → 重写之间有约 1.6 s 页面空窗（前端清空旧内容等新流），已剪掉，
 画面从旧内容直接切到重写中的新内容，读起来就是"它重写了"。剪掉的时间已同步到旁白与字幕。
 
+## 检索增强：BM25 + 向量 + RRF（D11）
+
+纯向量在**稀有 token** 上会休克（README 素材区记了两周的那条债）。这轮补上稀疏一路：
+
+| 组件 | 实现 | 为什么这么做 |
+|---|---|---|
+| BM25 | 自写 40 行（`app/rag.py` 的 `_BM25`）| chromadb 1.5.9 本地版**没有**原生 BM25，官方 `Rrf/Knn` 是 Cloud Search API；本机也没 `rank_bm25/jieba` |
+| 中文分词 | 字 bigram（`物流` → `物流`），英文/数字整词 | 不引分词依赖；短查询够用。代价写清：无词性/停用词，同义改写仍靠向量 |
+| 融合 | **RRF**：`score = Σ w / (60 + rank)`，双路各取 top20 | 两路分数量纲不同（cosine 0~1 vs BM25 无上界），直接加权相加会被 BM25 碾压；RRF 只看名次，k=60 是通行平滑常数 |
+| 开关 | `RETRIEVAL_MODE=hybrid`(默认) / `dense` | 出问题能一键降级回纯向量，不用改代码 |
+
+**效果（`scripts/evaluate_retrieval(检索).py` 第三栏，可重跑）**：
+
+```cmd
+:: 库内只有 1 条含 HX3216、1 条含 AirPods
+HX3216    dense 未命中  →  hybrid 第 1 名
+AirPods   dense 第 3 名 →  hybrid 第 1 名
+```
+
+12 条非同源查询上：`MRR 0.9028 → 0.9167`（2 条升、1 条降，**净增很小，如实记录**）；
+权重扫描发现只有 1:1 有增益（0.7/0.5/2:1/3:1 都等于基线）——说明 BM25 的价值主要在**精确 token**，
+不在语义改写，这正是设计预期。
+
+## 鉴权（D11）
+
+`/health` 和静态页**不挡**（健康检查要能裸探）；业务接口在设了 `API_TOKEN` 后必须带凭证。
+
+```cmd
+set API_TOKEN=<你的 token>          :: 不设 = 不鉴权（本地开发默认）
+```
+
+| 调用方式 | 用法 |
+|---|---|
+| REST（`/chat`、`/review`） | `Authorization: Bearer <token>` |
+| SSE（`/chat/stream`、`/review/stream`） | `?token=<token>` —— **浏览器原生 EventSource 不能自定义请求头**，只能走 query |
+| 页面 | 打开 `http://127.0.0.1:8800/?token=<token>`，前端会自动给流请求带上 |
+
+验收：`scripts/evaluate_auth.py`（对设了 token 的实例，**11 条断言**：无 token 401、错误 token 401、
+带 token 后落到各自业务校验 422/409、health 与静态页仍 200）。
+
+## 延迟的三层测量与一次更正（D11）
+
+**先更正 D9-e4 的一个错结论**：那里记的"`retrieve` 1.4s"是**客户端测量假象**。用 `curl --trace-time`
+逐块打时间戳，服务端从请求到 `retrieve` 事件只有 **6ms**：
+
+```
+Recv header（3ms） → Recv data 65B = event: run.started
+                   → Recv data 89B = node.progress(retrieve)   ← 距上一条 6ms
+                   → 1.4s 后才有下一条：那是 orchestrator 在调 LLM
+```
+
+分层实测（`scripts/probe_latency_layers.py` / `probe_graph_startup.py`）：
+
+| 层 | 值 |
+|---|---|
+| 图启动 | MemorySaver **2.3ms**；SqliteSaver **127ms**（绑挂载首次读检查点） |
+| 检索（warm） | **17–27ms**；**首次 1.0–1.4s**（开 chroma + 载 ONNX + 建 BM25 索引） |
+| 宿主→容器 HTTP | **0–16ms**（20 次无慢请求） |
+
+结论：**每请求固定开销约 25ms**；那笔 1.0–1.4s 是一次性的冷启动，已用 `lifespan` 里的 `warmup()`
+挪到启动阶段（实测 `embedder 0.809s + collection 0.17s + bm25 0.14s = 1.119s`），第一个用户不再付。
+`get_collection()` 也从"每次 search 重建 PersistentClient"改成缓存（**每次省 ~10ms**）。
+
 ## 进度
 
 - [x] D1 环境验证 + 仓库骨架 + 210 条评论数据（含金标注）
@@ -267,6 +330,8 @@ D:/python/python.exe demo/build_video.py
 - [x] D8 Docker 部署（Dockerfile + .dockerignore + compose；上下文 464MB→87.75kB，镜像 925MB，healthy 实测，SSE 过 NAT 未缓冲，重启后单号仍可查）
 - [x] D9 评测（检索非同源 + 脏数据三栏 + 协议回归 14/14 + 端到端 5 次中位数）+ README 定稿
 - [x] D10 演示视频（Playwright 无头录屏 25.6 s + edge-tts 旁白 + ASS 字幕；脚本可重跑）
+- [x] D11 检索增强（BM25+向量+RRF，稀有 token HX3216/AirPods 从"未命中"→第1）+ 鉴权（API_TOKEN，11/11 验收）
+      + 延迟三层测量（更正 D9-e4 的 1.4s 为客户端假象；服务端到 retrieve 仅 6ms；冷启动 1.1s 已用 warmup 前移）
 
 <!-- 素材区：D9 整理技术难点时从这里搬，勿删 -->
 

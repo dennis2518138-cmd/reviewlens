@@ -99,12 +99,29 @@ def main() -> None:
     src = eval_suite("同源 SOURCE", SOURCE, gold)
     par = eval_suite("非同源 PARAPH", cases, gold)
 
+    # ---- 稀有 token 召回（向量休克的场景，混合召回应当修好）----
+    # 判据不是"相似度高"，而是"那条唯一含该 token 的评论有没有进 top3、排第几"。
+    from app.rag import docs_containing, search_dense, search_hybrid
+    rare_rows = []
+    print("\n===== 稀有 token（dense vs hybrid）=====")
+    for token in ("HX3216", "AirPods"):
+        truth = set(docs_containing(token))
+        d_hits = [h["id"] for h in search_dense(token, 3)]
+        h_hits = [h["id"] for h in search_hybrid(token, 3)]
+        d_rank = next((i for i, x in enumerate(d_hits, 1) if x in truth), 0)
+        h_rank = next((i for i, x in enumerate(h_hits, 1) if x in truth), 0)
+        print(f"  {token:<10} 库内命中{len(truth)}条  dense名次={d_rank or '未命中'}  "
+              f"hybrid名次={h_rank or '未命中'}")
+        rare_rows.append({"token": token, "in_corpus": len(truth),
+                          "dense_rank": d_rank, "hybrid_rank": h_rank})
+
     print(f"\n===== 两栏对照（禁止合并）=====")
     print(f"  同源   hit@1={src['hit@1_rate']}  hit@3={src['hit@3_rate']}  MRR={src['MRR']}")
     print(f"  非同源 hit@1={par['hit@1_rate']}  hit@3={par['hit@3_rate']}  MRR={par['MRR']}")
 
-    out = {"generated": "D9-e1", "top_k": TOP_K, "source_suite": src,
-           "paraphrase_suite": par,
+    out = {"generated": "D11-e1", "top_k": TOP_K, "source_suite": src,
+           "paraphrase_suite": par, "rare_token_suite": rare_rows,
+           "retrieval_mode": __import__("os").getenv("RETRIEVAL_MODE", "hybrid"),
            "uncheckable_dims": [{"query": q, "expect_dim": d} for q, d in uncheckable]}
     (ROOT / "data" / "eval_retrieval.json").write_text(
         json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -1,0 +1,405 @@
+{
+  "generated": "D9-e1",
+  "top_k": 3,
+  "source_suite": {
+    "suite": "同源 SOURCE",
+    "n": 6,
+    "hit@1": 6,
+    "hit@3": 6,
+    "hit@1_rate": 1.0,
+    "hit@3_rate": 1.0,
+    "MRR": 1.0,
+    "rows": [
+      {
+        "query": "物流太慢",
+        "expect_dim": "物流",
+        "flags": [
+          true,
+          true,
+          true
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.7796,
+          0.7787,
+          0.7691
+        ],
+        "top_ids": [
+          "TWS-X1-3789-019",
+          "TWS-M2-3861-020",
+          "OB-C9-3942-021"
+        ]
+      },
+      {
+        "query": "续航不行",
+        "expect_dim": "续航",
+        "flags": [
+          true,
+          true,
+          true
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.8164,
+          0.7657,
+          0.7572
+        ],
+        "top_ids": [
+          "OB-B2-3913-025",
+          "OB-C9-3942-026",
+          "OB-B2-3913-020"
+        ]
+      },
+      {
+        "query": "降噪效果差",
+        "expect_dim": "降噪",
+        "flags": [
+          true,
+          true,
+          true
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.7077,
+          0.7064,
+          0.7
+        ],
+        "top_ids": [
+          "TWS-P3-3819-028",
+          "TWS-P3-3819-022",
+          "TWS-P3-3819-015"
+        ]
+      },
+      {
+        "query": "客服不回消息",
+        "expect_dim": "客服",
+        "flags": [
+          true,
+          true,
+          true
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.7507,
+          0.7076,
+          0.6484
+        ],
+        "top_ids": [
+          "OB-A6-3885-022",
+          "TWS-P3-3819-023",
+          "TWS-P3-3819-07"
+        ]
+      },
+      {
+        "query": "做工粗糙",
+        "expect_dim": "外观做工",
+        "flags": [
+          true,
+          true,
+          true
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.642,
+          0.6082,
+          0.5985
+        ],
+        "top_ids": [
+          "TWS-P3-3819-05",
+          "TWS-P3-3819-030",
+          "TWS-M2-3861-06"
+        ]
+      },
+      {
+        "query": "价格太贵",
+        "expect_dim": "价格性价比",
+        "flags": [
+          true,
+          true,
+          false
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.6217,
+          0.6076,
+          0.5921
+        ],
+        "top_ids": [
+          "OB-A6-3885-07",
+          "OB-B2-3913-030",
+          "OB-C9-3942-019"
+        ]
+      }
+    ]
+  },
+  "paraphrase_suite": {
+    "suite": "非同源 PARAPH",
+    "n": 12,
+    "hit@1": 10,
+    "hit@3": 12,
+    "hit@1_rate": 0.8333,
+    "hit@3_rate": 1.0,
+    "MRR": 0.9028,
+    "rows": [
+      {
+        "query": "早上说的第三天到，我等到第四天",
+        "expect_dim": "物流",
+        "flags": [
+          true,
+          true,
+          true
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.6152,
+          0.586,
+          0.5788
+        ],
+        "top_ids": [
+          "TWS-X1-3789-019",
+          "TWS-M2-3861-025",
+          "OB-B2-3913-09"
+        ]
+      },
+      {
+        "query": "问了三遍没人搭理我",
+        "expect_dim": "客服",
+        "flags": [
+          true,
+          true,
+          true
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.6148,
+          0.6034,
+          0.5968
+        ],
+        "top_ids": [
+          "OB-A6-3885-022",
+          "TWS-P3-3819-027",
+          "TWS-P3-3819-023"
+        ]
+      },
+      {
+        "query": "听半集剧就得插线",
+        "expect_dim": "续航",
+        "flags": [
+          false,
+          false,
+          true
+        ],
+        "first_relevant_rank": 3,
+        "rr": 0.3333,
+        "sims": [
+          0.5348,
+          0.5074,
+          0.4991
+        ],
+        "top_ids": [
+          "TWS-X1-3789-010",
+          "TWS-P3-3819-017",
+          "OB-B2-3913-013"
+        ]
+      },
+      {
+        "query": "vocal 听着像蒙了层布",
+        "expect_dim": "音质",
+        "flags": [
+          true,
+          true,
+          true
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.5677,
+          0.557,
+          0.5514
+        ],
+        "top_ids": [
+          "TWS-P3-3819-03",
+          "TWS-X1-3789-026",
+          "TWS-M2-3861-018"
+        ]
+      },
+      {
+        "query": "地铁里邻座打电话我一个字不落全听见",
+        "expect_dim": "降噪",
+        "flags": [
+          true,
+          true,
+          true
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.6406,
+          0.6221,
+          0.5954
+        ],
+        "top_ids": [
+          "TWS-X1-3789-03",
+          "TWS-P3-3819-04",
+          "TWS-X1-3789-027"
+        ]
+      },
+      {
+        "query": "接缝刮手，边上还有毛刺",
+        "expect_dim": "外观做工",
+        "flags": [
+          true,
+          false,
+          true
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.6524,
+          0.6128,
+          0.6121
+        ],
+        "top_ids": [
+          "TWS-X1-3789-012",
+          "OB-A6-3885-08",
+          "OB-B2-3913-031"
+        ]
+      },
+      {
+        "query": "连上两分钟自己就断了",
+        "expect_dim": "连接稳定性",
+        "flags": [
+          true,
+          true,
+          true
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.6528,
+          0.6454,
+          0.6441
+        ],
+        "top_ids": [
+          "OB-A6-3885-09",
+          "OB-A6-3885-030",
+          "TWS-X1-3789-028"
+        ]
+      },
+      {
+        "query": "早上刷完舌头舔一圈特别滑",
+        "expect_dim": "清洁力",
+        "flags": [
+          true,
+          true,
+          true
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.7085,
+          0.6902,
+          0.6452
+        ],
+        "top_ids": [
+          "OB-C9-3942-00",
+          "OB-A6-3885-011",
+          "OB-A6-3885-031"
+        ]
+      },
+      {
+        "query": "这价买回来到底亏不亏",
+        "expect_dim": "价格性价比",
+        "flags": [
+          true,
+          false,
+          true
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.5966,
+          0.566,
+          0.5641
+        ],
+        "top_ids": [
+          "OB-A6-3885-07",
+          "TWS-P3-3819-014",
+          "OB-B2-3913-030"
+        ]
+      },
+      {
+        "query": "跟小风扇在耳朵边上嗡嗡一样",
+        "expect_dim": "噪声",
+        "flags": [
+          true,
+          true,
+          true
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.6487,
+          0.6259,
+          0.6124
+        ],
+        "top_ids": [
+          "OB-A6-3885-04",
+          "OB-A6-3885-026",
+          "TWS-M2-3861-016"
+        ]
+      },
+      {
+        "query": "午休趴着睡一会就难受",
+        "expect_dim": "佩戴舒适度",
+        "flags": [
+          false,
+          true,
+          false
+        ],
+        "first_relevant_rank": 2,
+        "rr": 0.5,
+        "sims": [
+          0.5326,
+          0.5117,
+          0.5083
+        ],
+        "top_ids": [
+          "TWS-P3-3819-032",
+          "TWS-P3-3819-01",
+          "TWS-M2-3861-016"
+        ]
+      },
+      {
+        "query": "取件要跑两趟驿站，还要报手机尾号",
+        "expect_dim": "物流",
+        "flags": [
+          true,
+          false,
+          true
+        ],
+        "first_relevant_rank": 1,
+        "rr": 1.0,
+        "sims": [
+          0.6171,
+          0.6048,
+          0.5803
+        ],
+        "top_ids": [
+          "TWS-P3-3819-018",
+          "OB-C9-3942-028",
+          "TWS-P3-3819-031"
+        ]
+      }
+    ]
+  },
+  "uncheckable_dims": []
+}

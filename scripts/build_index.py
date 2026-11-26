@@ -22,6 +22,12 @@ def main() -> None:
 
     rows = load_rows(args.input)
     stats = index_reviews(rows, reset=not args.keep)
+    # 索引变了，BM25 里缓存的旧文档必须失效，否则混合召回会用到上一版语料
+    try:
+        from app.rag import reset_bm25
+        reset_bm25()
+    except Exception:
+        pass
     print(json.dumps(stats, ensure_ascii=False))
     if stats["indexed"] == 0:
         raise SystemExit("没有可入库的评论，检查输入文件")
